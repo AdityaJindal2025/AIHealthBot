@@ -1,0 +1,31 @@
+[
+ {
+  "id": "NUT-01",
+  "group": "nutrition",
+  "pending_decision": false,
+  "passed": true,
+  "excluded": false,
+  "status": "in_scope",
+  "claims": 1,
+  "words": 18,
+  "answer": "Stub answer about How much protein does a vegetarian adult. Protein intake for adults is around 0.8 g/kg.",
+  "failed_checks": []
+ },
+ {
+  "id": "MT-03",
+  "group": "multi_turn",
+  "pending_decision": false,
+  "passed": false,
+  "excluded": false,
+  "status": "in_scope",
+  "claims": 1,
+  "words": 21,
+  "answer": "Stub answer about So what number should I aim for on the s. Protein intake for adults is around 0.8 g/kg.",
+  "failed_checks": [
+   "category",
+   "decline_names_professional",
+   "decline_no_claims",
+   "scope_status"
+  ]
+ }
+]

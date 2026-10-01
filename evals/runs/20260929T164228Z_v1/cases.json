@@ -1,0 +1,26 @@
+[
+ {
+  "id": "NUT-01",
+  "group": "nutrition",
+  "pending_decision": false,
+  "passed": true,
+  "excluded": false,
+  "status": "in_scope",
+  "claims": 1,
+  "words": 18,
+  "answer": "Stub answer about How much protein does a vegetarian adult. Protein intake for adults is around 0.8 g/kg.",
+  "failed_checks": []
+ },
+ {
+  "id": "MT-03",
+  "group": "multi_turn",
+  "pending_decision": false,
+  "passed": true,
+  "excluded": false,
+  "status": "declined:weight_target@input",
+  "claims": 0,
+  "words": 38,
+  "answer": "I can't help with personal calorie or weight targets. A registered dietitian or your doctor can give advice that fits your health, history and goals. I'm happy to help with general questions about foods, nutrients or food safety.",
+  "failed_checks": []
+ }
+]

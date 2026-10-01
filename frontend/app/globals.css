@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+/* "Vital Nutrition" tokens from stitch_nutrition_assistant_web_app/vital_nutrition/DESIGN.md */
+@theme {
+  --color-surface: #edfef1;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #e7f8eb;
+  --color-surface-container: #e1f2e5;
+  --color-surface-container-high: #dcece0;
+  --color-surface-container-highest: #d6e7da;
+  --color-surface-variant: #d6e7da;
+  --color-on-surface: #111e17;
+  --color-on-surface-variant: #3f493f;
+  --color-inverse-surface: #25342b;
+  --color-outline: #6f7a6e;
+  --color-outline-variant: #becabc;
+  --color-primary: #00652c;
+  --color-primary-container: #15803d;
+  --color-on-primary: #ffffff;
+  --color-on-primary-fixed-variant: #005323;
+  --color-secondary: #9d4300;
+  --color-secondary-container: #fd761a;
+  --color-tertiary: #415d4d;
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+  --color-notice: #fef3c7;
+  --color-notice-border: #fcd34d;
+  --color-notice-icon: #fde68a;
+  --color-on-notice: #78350f;
+
+  --text-headline-sm: 1.25rem;
+  --text-headline-sm--line-height: 1.75rem;
+  --text-headline-sm--letter-spacing: -0.01em;
+  --text-headline-sm--font-weight: 600;
+  --text-body-md: 1rem;
+  --text-body-md--line-height: 1.6rem;
+  --text-body-sm: 0.875rem;
+  --text-body-sm--line-height: 1.45rem;
+  --text-label-lg: 0.9375rem;
+  --text-label-lg--line-height: 1.25rem;
+  --text-label-lg--letter-spacing: 0.01em;
+  --text-label-lg--font-weight: 600;
+  --text-label-md: 0.8125rem;
+  --text-label-md--line-height: 1.125rem;
+  --text-label-md--letter-spacing: 0.02em;
+  --text-label-md--font-weight: 600;
+  --text-label-sm: 0.75rem;
+  --text-label-sm--line-height: 1rem;
+  --text-label-sm--letter-spacing: 0.03em;
+  --text-label-sm--font-weight: 500;
+
+  --shadow-card: 0 2px 8px -2px rgba(28, 42, 34, 0.04), 0 1px 3px -1px rgba(28, 42, 34, 0.02);
+  --shadow-raised: 0 10px 20px -4px rgba(28, 42, 34, 0.06), 0 4px 6px -2px rgba(28, 42, 34, 0.03);
+  --shadow-overlay: 0 20px 32px -8px rgba(28, 42, 34, 0.12), 0 8px 12px -4px rgba(28, 42, 34, 0.04);
+}
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+html,
+body {
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+  font-family: var(--font-sans);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

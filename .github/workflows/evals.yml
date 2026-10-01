@@ -1,0 +1,33 @@
+# Runs the regression evals against a deployed backend. Manual trigger only: every run
+# spends API credits (IP Phase 8, Cross-Cutting Practices).
+name: Evals
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Backend URL, e.g. https://<app>.up.railway.app"
+        required: true
+      repeat:
+        description: "Times to run each question (drift check)"
+        default: "1"
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ./backend
+      - name: Run evals
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          REPEAT: ${{ inputs.repeat }}
+        run: python evals/run_evals.py --base-url "$BASE_URL" --repeat "$REPEAT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-run
+          path: evals/runs/
