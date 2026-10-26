@@ -1,15 +1,17 @@
-"""The only module that imports `anthropic` (AP §5.3).
+"""The only module that imports `groq` (AP §5.3).
 
-`generate()` either returns a strictly validated `AssistantOutput` or raises `ModelFailure`.
-There are no server-side fallbacks and no repair retries: a bad response is a failure
-that the caller records (Rule 6).
+`generate()` (M1 path) returns a strictly validated `AssistantOutput`, and
+`generate_grounded()` (M2) a strictly validated `GroundedOutput`; both raise `ModelFailure`
+otherwise, through the same call path and error mapping (`_complete`, adjustment A1).
+There are no fallbacks and no repair retries: a bad response is a failure that the
+caller records (Rule 6).
 
-Why `messages.create` + `output_config.format` instead of `messages.parse`: in the
-installed SDK, `parse()` parses the text inside the call, so a truncated or refused
-response raises a parse error before `stop_reason` can be checked and the raw text is
-lost. Using the documented raw-schema path lets us check `stop_reason` first and keep
-the raw text for the `failures` row (IP Risks: "fall back to messages.create with
-output_config.format + Pydantic validation").
+The model runs on Groq through the official `groq` SDK, using Chat Completions with
+`response_format={"type": "json_schema", "strict": true}` (Groq's native structured
+output mode). Strict mode is only available on some Groq models, so `MODEL_ID` must
+be one of them (for example `openai/gpt-oss-120b`). We read the raw text and validate
+it ourselves, so `finish_reason` is checked first and the raw text is kept for the
+`failures` row.
 """
 
 import json
@@ -19,21 +21,22 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Literal
 
-import anthropic
+import groq
 import httpx
 from pydantic import ValidationError
 
 from app.config import get_settings
 from app.llm.errors import ModelFailure
 from app.llm.prompts import load_system_prompt
-from app.schemas.json_schema import ASSISTANT_OUTPUT_JSON_SCHEMA
-from app.schemas.model_output import AssistantOutput
+from app.schemas.json_schema import ASSISTANT_OUTPUT_JSON_SCHEMA, GROUNDED_OUTPUT_JSON_SCHEMA
+from app.schemas.model_output import AssistantOutput, GroundedOutput, UngroundedOutput
 
 log = logging.getLogger("app.llm")
 
 MAX_TOKENS = 16000
 TIMEOUT_S = 60
 MAX_RETRIES = 2
+REASONING_EFFORT = "low"
 
 
 @dataclass(frozen=True)
@@ -57,18 +60,18 @@ def _log_http_response(response: httpx.Response) -> None:
     level = logging.WARNING if response.status_code >= 400 else logging.INFO
     log.log(
         level,
-        "anthropic_http_response",
-        extra={"status_code": response.status_code, "anthropic_request_id": response.headers.get("request-id")},
+        "groq_http_response",
+        extra={"status_code": response.status_code, "groq_request_id": response.headers.get("x-request-id")},
     )
 
 
 @lru_cache
-def get_client() -> anthropic.Anthropic:
-    return anthropic.Anthropic(
-        api_key=get_settings().ANTHROPIC_API_KEY or None,
+def get_client() -> groq.Groq:
+    return groq.Groq(
+        api_key=get_settings().GROQ_API_KEY or None,
         timeout=TIMEOUT_S,
         max_retries=MAX_RETRIES,
-        http_client=anthropic.DefaultHttpxClient(event_hooks={"response": [_log_http_response]}),
+        http_client=groq.DefaultHttpxClient(event_hooks={"response": [_log_http_response]}),
     )
 
 
@@ -95,55 +98,57 @@ def build_messages(history: list[Turn], user_message: str, history_turns: int) -
     return messages
 
 
-def _first_text(response: anthropic.types.Message) -> str | None:
-    for block in response.content:
-        if block.type == "text":
-            return block.text
-    return None
-
-
 def validate_output(raw_text: str | None) -> AssistantOutput:
     """Strict validation of the model's JSON text. Raises ValueError/ValidationError."""
     if raw_text is None:
-        raise ValueError("response has no text content block")
+        raise ValueError("response has no text content")
     data = json.loads(raw_text)
-    output = AssistantOutput.model_validate(data, strict=True)
+    output = UngroundedOutput.model_validate(data, strict=True)
     if not all(c.source is None for c in output.claims):  # Rule 3, belt and braces
-        raise ValueError("claims[].source must be null in Milestone 1")
-    return output
+        raise ValueError("claims[].source must be null when answering without retrieval")
+    return AssistantOutput.model_validate(output.model_dump())
 
 
-def generate(history: list[Turn], user_message: str) -> GenerationResult:
-    settings = get_settings()
-    model_id = settings.MODEL_ID
-    messages = build_messages(history, user_message, settings.HISTORY_TURNS)
+@dataclass(frozen=True)
+class _Completion:
+    raw_text: str | None
+    model: str
+    latency_ms: int
+    input_tokens: int | None
+    output_tokens: int | None
 
+
+def _complete(messages: list[dict], schema_name: str, schema: dict) -> _Completion:
+    """One strict-schema chat completion. Maps every SDK error and bad finish to `ModelFailure`."""
+    model_id = get_settings().MODEL_ID
     start = time.monotonic()
 
     def elapsed() -> int:
         return int((time.monotonic() - start) * 1000)
 
     try:
-        response = get_client().messages.create(
+        response = get_client().chat.completions.create(
             model=model_id,
-            max_tokens=MAX_TOKENS,
-            system=load_system_prompt(settings.PROMPT_VERSION),
             messages=messages,
-            output_config={
-                "effort": "low",
-                "format": {"type": "json_schema", "schema": ASSISTANT_OUTPUT_JSON_SCHEMA},
+            max_completion_tokens=MAX_TOKENS,
+            reasoning_effort=REASONING_EFFORT,
+            # Reasoning goes in a separate field we never use; leave it out of the response.
+            include_reasoning=False,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": schema_name, "strict": True, "schema": schema},
             },
         )
-    except anthropic.RateLimitError as e:
+    except groq.RateLimitError as e:
         raise ModelFailure("api_error", f"rate_limited status={e.status_code}", model=model_id,
                            latency_ms=elapsed()) from e
-    except anthropic.APIStatusError as e:
+    except groq.APIStatusError as e:
         raise ModelFailure("api_error", f"status={e.status_code} {e.message}", model=model_id,
                            latency_ms=elapsed()) from e
-    except anthropic.APIConnectionError as e:
-        kind = "timeout" if isinstance(e, anthropic.APITimeoutError) else "connection_error"
+    except groq.APIConnectionError as e:
+        kind = "timeout" if isinstance(e, groq.APITimeoutError) else "connection_error"
         raise ModelFailure("api_error", kind, model=model_id, latency_ms=elapsed()) from e
-    except anthropic.AnthropicError as e:
+    except groq.GroqError as e:
         # e.g. no credentials configured (EC LLM-12)
         raise ModelFailure("api_error", f"{type(e).__name__}: {e}", model=model_id,
                            latency_ms=elapsed()) from e
@@ -153,33 +158,76 @@ def generate(history: list[Turn], user_message: str) -> GenerationResult:
 
     latency_ms = elapsed()
     served_model = getattr(response, "model", None) or model_id
-    raw_text = _first_text(response)
+    if not response.choices:
+        raise ModelFailure("schema_invalid", "response has no choices", model=served_model, latency_ms=latency_ms)
+    choice = response.choices[0]
+    raw_text = choice.message.content
+    finish_reason = choice.finish_reason
 
-    # Check stop_reason before reading content (AP §4.2 step 2).
-    if response.stop_reason == "refusal":
-        details = getattr(response, "stop_details", None)
-        category = getattr(details, "category", None) if details else None
-        raise ModelFailure("model_refusal", f"category={category}", raw_text, model=served_model,
+    # Check finish_reason before reading content (AP §4.2 step 2).
+    refusal = getattr(choice.message, "refusal", None)
+    if refusal or finish_reason == "content_filter":
+        raise ModelFailure("model_refusal", f"finish_reason={finish_reason} refusal={refusal!r}", raw_text,
+                           model=served_model, latency_ms=latency_ms)
+    if finish_reason == "length":
+        raise ModelFailure("truncated_output", f"max_completion_tokens={MAX_TOKENS}", raw_text, model=served_model,
                            latency_ms=latency_ms)
-    if response.stop_reason == "max_tokens":
-        raise ModelFailure("truncated_output", f"max_tokens={MAX_TOKENS}", raw_text, model=served_model,
-                           latency_ms=latency_ms)
-    if response.stop_reason != "end_turn":
-        # Never assume only three values exist (EC LLM-04).
-        raise ModelFailure("schema_invalid", f"unexpected stop_reason={response.stop_reason!r}", raw_text,
+    if finish_reason != "stop":
+        # Never assume only a few values exist (EC LLM-04).
+        raise ModelFailure("schema_invalid", f"unexpected finish_reason={finish_reason!r}", raw_text,
                            model=served_model, latency_ms=latency_ms)
 
-    try:
-        output = validate_output(raw_text)
-    except (ValidationError, json.JSONDecodeError, ValueError) as e:
-        raise ModelFailure("schema_invalid", str(e)[:2000], raw_text, model=served_model,
-                           latency_ms=latency_ms) from e
-
     usage = getattr(response, "usage", None)
-    return GenerationResult(
-        output=output,
-        model=served_model,
-        latency_ms=latency_ms,
-        input_tokens=getattr(usage, "input_tokens", None),
-        output_tokens=getattr(usage, "output_tokens", None),
-    )
+    return _Completion(raw_text, served_model, latency_ms, getattr(usage, "prompt_tokens", None),
+                       getattr(usage, "completion_tokens", None))
+
+
+def generate(history: list[Turn], user_message: str) -> GenerationResult:
+    """Milestone 1 path (`RAG_ENABLED=false`): answers from the model, every `source` null."""
+    settings = get_settings()
+    messages = [{"role": "system", "content": load_system_prompt(settings.PROMPT_VERSION)}]
+    messages += build_messages(history, user_message, settings.HISTORY_TURNS)
+    done = _complete(messages, "assistant_output", ASSISTANT_OUTPUT_JSON_SCHEMA)
+    try:
+        output = validate_output(done.raw_text)
+    except (ValidationError, json.JSONDecodeError, ValueError) as e:
+        raise ModelFailure("schema_invalid", str(e)[:2000], done.raw_text, model=done.model,
+                           latency_ms=done.latency_ms) from e
+    return GenerationResult(output=output, model=done.model, latency_ms=done.latency_ms,
+                            input_tokens=done.input_tokens, output_tokens=done.output_tokens)
+
+
+@dataclass(frozen=True)
+class GroundedResult:
+    output: GroundedOutput
+    model: str
+    latency_ms: int
+    input_tokens: int | None
+    output_tokens: int | None
+    raw_text: str | None
+
+
+def validate_grounded(raw_text: str | None) -> GroundedOutput:
+    """Strict validation of the grounded JSON (FAP §8.2). Raises ValueError/ValidationError."""
+    if raw_text is None:
+        raise ValueError("response has no text content")
+    return GroundedOutput.model_validate(json.loads(raw_text), strict=True)
+
+
+def generate_grounded(history: list[Turn], user_turn: str) -> GroundedResult:
+    """Milestone 2 path: `user_turn` holds the labelled sources and the question (FAP §8.1).
+
+    History turns carry the composed answers (with citation markers) of earlier turns; only the
+    current turn's sources are sent, so the model can only cite what was retrieved now.
+    """
+    settings = get_settings()
+    messages = [{"role": "system", "content": load_system_prompt(settings.PROMPT_VERSION)}]
+    messages += build_messages(history, user_turn, settings.HISTORY_TURNS)
+    done = _complete(messages, "grounded_output", GROUNDED_OUTPUT_JSON_SCHEMA)
+    try:
+        output = validate_grounded(done.raw_text)
+    except (ValidationError, json.JSONDecodeError, ValueError) as e:
+        raise ModelFailure("schema_invalid", str(e)[:2000], done.raw_text, model=done.model,
+                           latency_ms=done.latency_ms) from e
+    return GroundedResult(output=output, model=done.model, latency_ms=done.latency_ms,
+                          input_tokens=done.input_tokens, output_tokens=done.output_tokens, raw_text=done.raw_text)

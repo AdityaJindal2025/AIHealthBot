@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { ChatInput } from "@/components/ChatInput";
+import { DocumentFilter } from "@/components/DocumentFilter";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { BookIcon, CloseIcon, LogoMark, PlusIcon } from "@/components/Icons";
 import { MessageList } from "@/components/MessageList";
@@ -14,7 +15,12 @@ const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-
 export default function Home() {
   const chat = useChat();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const selectedClaims = chat.selected?.claims ?? [];
+
+  // A citation chip selects its chunk; on small screens the sources live in a drawer, so open it.
+  const onCite = (messageId: string, chunkId: string) => {
+    chat.focusSource(messageId, chunkId);
+    if (!window.matchMedia("(min-width: 1024px)").matches) setDrawerOpen(true);
+  };
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -69,6 +75,7 @@ export default function Home() {
               sending={chat.sending}
               selectedId={chat.selected?.id ?? null}
               onSelect={chat.select}
+              onCite={onCite}
               onExample={chat.send}
             />
           )}
@@ -80,16 +87,23 @@ export default function Home() {
               onDismiss={chat.dismissError}
             />
           )}
+          <DocumentFilter
+            documents={chat.documents}
+            value={chat.documentId}
+            onChange={chat.setDocumentId}
+            disabled={chat.sending}
+          />
           <ChatInput disabled={chat.sending || chat.loadingHistory} onSend={chat.send} />
         </section>
 
         <aside className="hidden overflow-y-auto border-l border-outline-variant bg-surface-container-lowest p-8 lg:block">
-          <SourcesPanel claims={selectedClaims} />
+          <SourcesPanel message={chat.selected} focusChunkId={chat.focusedChunkId} />
         </aside>
       </main>
 
       <footer className="border-t border-outline-variant bg-surface-container-low px-4 py-2 text-center text-label-sm text-on-surface-variant">
-        General information only, not medical advice.
+        Answers come only from the listed official guidance documents. General information only, not medical
+        advice.
       </footer>
 
       {drawerOpen && (
@@ -101,7 +115,7 @@ export default function Home() {
             onClick={() => setDrawerOpen(false)}
           />
           <div className="absolute inset-x-0 bottom-0 max-h-[75dvh] overflow-y-auto rounded-t-3xl bg-surface-container-lowest p-6 shadow-overlay">
-            <SourcesPanel claims={selectedClaims} />
+            <SourcesPanel message={chat.selected} focusChunkId={chat.focusedChunkId} />
             <button
               type="button"
               autoFocus

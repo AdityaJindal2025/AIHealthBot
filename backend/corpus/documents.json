@@ -1,0 +1,86 @@
+[
+  {
+    "document_id": "cold-food-storage",
+    "title": "Cold Food Storage Chart",
+    "publisher": "FoodSafety.gov (U.S. Department of Health and Human Services)",
+    "publisher_short": "FoodSafety.gov",
+    "year": null,
+    "url": null,
+    "aliases": ["cold food storage chart", "cold storage chart", "foodsafety.gov chart"],
+    "publisher_aliases": ["foodsafety.gov", "hhs", "department of health and human services"],
+    "verified_by": "",
+    "verified_on": ""
+  },
+  {
+    "document_id": "eatwell-guide",
+    "title": "The Eatwell Guide",
+    "publisher": "Public Health England",
+    "publisher_short": "PHE",
+    "year": null,
+    "url": null,
+    "aliases": ["eatwell guide", "the eatwell guide", "eatwell"],
+    "publisher_aliases": ["public health england", "phe"],
+    "verified_by": "",
+    "verified_on": ""
+  },
+  {
+    "document_id": "fao-who-healthy-diets",
+    "title": "What are healthy diets? Joint statement by the Food and Agriculture Organization of the United Nations and the World Health Organization",
+    "publisher": "Food and Agriculture Organization of the United Nations and World Health Organization",
+    "publisher_short": "FAO/WHO",
+    "year": null,
+    "url": null,
+    "aliases": ["what are healthy diets", "fao/who joint statement", "fao who joint statement", "joint statement on healthy diets"],
+    "publisher_aliases": ["fao", "food and agriculture organization", "fao/who", "who", "world health organization"],
+    "verified_by": "",
+    "verified_on": ""
+  },
+  {
+    "document_id": "fsa-chill",
+    "title": "How to chill, freeze and defrost food safely",
+    "publisher": "Food Standards Agency",
+    "publisher_short": "FSA",
+    "year": null,
+    "url": null,
+    "aliases": ["how to chill, freeze and defrost food safely", "fsa chill guidance", "fsa chilling guidance"],
+    "publisher_aliases": ["food standards agency", "fsa"],
+    "verified_by": "",
+    "verified_on": ""
+  },
+  {
+    "document_id": "kitchen-companion",
+    "title": "Kitchen Companion: Your Safe Food Handbook",
+    "publisher": "U.S. Department of Agriculture, Food Safety and Inspection Service",
+    "publisher_short": "USDA FSIS",
+    "year": null,
+    "url": null,
+    "aliases": ["kitchen companion", "safe food handbook"],
+    "publisher_aliases": ["usda", "fsis", "food safety and inspection service", "department of agriculture"],
+    "verified_by": "",
+    "verified_on": ""
+  },
+  {
+    "document_id": "who-five-keys",
+    "title": "Five Keys to Safer Food Manual",
+    "publisher": "World Health Organization",
+    "publisher_short": "WHO",
+    "year": null,
+    "url": null,
+    "aliases": ["five keys to safer food", "five keys", "5 keys to safer food"],
+    "publisher_aliases": ["who", "world health organization", "world health organisation"],
+    "verified_by": "",
+    "verified_on": ""
+  },
+  {
+    "document_id": "who-healthy-diet",
+    "title": "Healthy diet (Fact sheet N°394)",
+    "publisher": "World Health Organization",
+    "publisher_short": "WHO",
+    "year": null,
+    "url": null,
+    "aliases": ["who healthy diet", "healthy diet fact sheet", "fact sheet 394", "fact sheet n°394"],
+    "publisher_aliases": ["who", "world health organization", "world health organisation"],
+    "verified_by": "",
+    "verified_on": ""
+  }
+]

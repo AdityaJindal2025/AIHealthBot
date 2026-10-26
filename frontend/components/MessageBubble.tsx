@@ -2,9 +2,20 @@
 
 import { useEffect, useId, useState } from "react";
 
-import type { ChatMessage } from "@/lib/types";
+import { citationText, type ChatMessage, type Source } from "@/lib/types";
 
-import { ArrowRightIcon, CheckIcon, ChevronIcon, CopyIcon, FactCheckIcon, InfoIcon, LeafIcon, VerifiedIcon } from "./Icons";
+import {
+  ArrowRightIcon,
+  BookIcon,
+  CheckIcon,
+  ChevronIcon,
+  CopyIcon,
+  FactCheckIcon,
+  InfoIcon,
+  LeafIcon,
+  SearchIcon,
+  VerifiedIcon,
+} from "./Icons";
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-container";
 
@@ -12,7 +23,45 @@ type Props = {
   message: ChatMessage;
   selected?: boolean;
   onSelect?: (id: string) => void;
+  /** A citation chip was clicked: show that chunk in the sources panel. */
+  onCite?: (messageId: string, chunkId: string) => void;
 };
+
+/** "[3] WHO, 2020". Clicking it highlights the cited chunk in the sources panel (FAP §12). */
+export function CitationChip({ source, onClick }: { source: Source; onClick?: () => void }) {
+  const text = citationText(source);
+  const className =
+    "inline-flex flex-none items-center gap-1.5 rounded-full border border-primary-container/40 bg-surface-container px-2.5 py-1 text-label-sm text-on-primary-fixed-variant";
+  if (!onClick) {
+    return (
+      <span className={className} title={`${source.document_name} — ${source.section}`}>
+        <BookIcon className="h-3.5 w-3.5" />
+        {text}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Source ${text}: ${source.document_name}. Show in sources panel`}
+      title={`${source.document_name} — ${source.section}`}
+      className={`${className} transition-colors hover:bg-surface-container-high ${focusRing}`}
+    >
+      <BookIcon className="h-3.5 w-3.5" />
+      {text}
+    </button>
+  );
+}
+
+/** Distinct cited sources, in the order the claims first cite them. */
+function citedSources(message: ChatMessage): Source[] {
+  const seen = new Map<string, Source>();
+  for (const claim of message.claims) {
+    if (claim.source && !seen.has(claim.source.chunk_id)) seen.set(claim.source.chunk_id, claim.source);
+  }
+  return [...seen.values()];
+}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -41,7 +90,7 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export function MessageBubble({ message, selected = false, onSelect }: Props) {
+export function MessageBubble({ message, selected = false, onSelect, onCite }: Props) {
   const [open, setOpen] = useState(false);
   const claimsId = useId();
 
@@ -83,7 +132,57 @@ export function MessageBubble({ message, selected = false, onSelect }: Props) {
     );
   }
 
+  // "We don't have guidance on that" looks different from "We won't answer that" (FPS §4.5).
+  if (message.grounding?.status === "not_covered") {
+    const { searched, filter_document_id: filtered } = message.grounding;
+    return (
+      <div className="flex justify-start" data-testid="not-covered-message">
+        <div
+          role="note"
+          className="flex w-full max-w-[94%] items-start gap-3.5 rounded-2xl border border-uncovered-border bg-uncovered p-5 text-on-uncovered shadow-card"
+        >
+          <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-uncovered-icon">
+            <SearchIcon className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="pb-1 text-label-lg">
+              Nutrition Assistant <span className="text-label-sm opacity-80">· Not covered</span>
+            </p>
+            <p className={`text-body-md ${textClass}`}>{message.content}</p>
+            {searched.length > 0 && (
+              <div className="mt-3">
+                <p className="text-label-sm font-bold tracking-wider uppercase opacity-80">
+                  {filtered ? "Searched (as you asked)" : `Searched ${searched.length} documents`}
+                </p>
+                <ul className="mt-1.5 space-y-1 text-body-sm">
+                  {searched.map((d) => (
+                    <li key={d.document_id} className="[overflow-wrap:anywhere]">
+                      <span className="italic">{d.document_name}</span> — {d.publisher}
+                      {d.year != null ? `, ${d.year}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {onSelect && message.sources.length > 0 && (
+              <button
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onSelect(message.id)}
+                className={`mt-3 rounded-lg px-1.5 py-1 text-label-md underline underline-offset-4 ${focusRing}`}
+              >
+                {selected ? "Showing what was retrieved" : "View what was retrieved"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const count = message.claims.length;
+  const cited = citedSources(message);
+  const cite = (source: Source) => (onCite ? () => onCite(message.id, source.chunk_id) : undefined);
 
   return (
     <div className="flex flex-col items-start gap-3">
@@ -100,6 +199,14 @@ export function MessageBubble({ message, selected = false, onSelect }: Props) {
         </div>
 
         <p className={`text-body-md text-on-surface ${textClass}`}>{message.content}</p>
+
+        {cited.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-2" aria-label="Cited sources">
+            {cited.map((source) => (
+              <CitationChip key={source.chunk_id} source={source} onClick={cite(source)} />
+            ))}
+          </div>
+        )}
 
         <div className="mt-5 flex items-start justify-between gap-3 border-t border-surface-container pt-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -150,10 +257,17 @@ export function MessageBubble({ message, selected = false, onSelect }: Props) {
                 className="flex flex-col justify-between gap-3 rounded-lg bg-surface-container-lowest p-3.5 shadow-card md:flex-row md:items-center"
               >
                 <span className={`text-body-sm text-on-surface ${textClass}`}>{claim.text}</span>
-                <span className="inline-flex flex-none items-center gap-1.5 self-start rounded-full bg-surface-container px-2.5 py-1 text-label-sm text-on-surface-variant md:self-auto">
-                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-secondary" />
-                  <span>Unverified</span>
-                </span>
+                {claim.source ? (
+                  <span className="self-start md:self-auto">
+                    <CitationChip source={claim.source} onClick={cite(claim.source)} />
+                  </span>
+                ) : (
+                  // Only on the Milestone 1 path: an answer without retrieval has no citations.
+                  <span className="inline-flex flex-none items-center gap-1.5 self-start rounded-full bg-surface-container px-2.5 py-1 text-label-sm text-on-surface-variant md:self-auto">
+                    <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-secondary" />
+                    <span>Unverified</span>
+                  </span>
+                )}
               </li>
             ))}
           </ul>

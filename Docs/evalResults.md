@@ -249,3 +249,37 @@ The full claim-by-claim review goes in [failureLog.md](failureLog.md). Copy the 
 - **Record the model ID with every run.** Only compare runs that used the same model, or say in the run history that the model changed (EC EVAL-08).
 - **Size and cost.** The set has 52 single questions plus 6 multi-turn messages, 58 requests in all. With `--repeat 3` that's up to 174 requests and about 10 minutes at the throttled rate. Questions the input guard declines don't call the model, so the number of model calls is lower. Keep the eval CI job manual-trigger only (IP Phase 8).
 - **After every prompt change:** copy the prompt to a new version, bump `PROMPT_VERSION`, run the evals, update this file, then commit the prompt, its changelog entry, the run and this file together. Merge only if T6 (regressions) is 0.
+
+---
+
+# Milestone 2: Grounded Answers
+
+> **Status: no grounded chat run yet.** That needs the Groq key (`run_evals.py` against a grounded backend). The retrieval eval below is real and needs no model.
+
+## 8. Retrieval Eval (T13)
+
+| Run | Embedding model | k / cap | Doc hit@k | Doc recall@k | Cross-doc: all found | Chunk recall@k | MRR | Floor |
+|---|---|---|---|---|---|---|---|---|
+| [`20261026T035839Z`](../evals/retrieval_runs/20261026T035839Z/summary.md) | `BAAI/bge-small-en-v1.5` | 6 / 2 | 1.00 | 0.964 | 0.60 | 1.00 | 0.990 | 0.73 (keeps 95.6% answerable, rejects 100% not-in-corpus) |
+
+The baseline for T13 is `evals/retrieval_baseline.json` (document recall@6 = 0.9643). It is never lowered, and the `Retrieval eval` CI workflow fails below it.
+
+## 9. Acceptance Thresholds T8–T14 (FAP §13.3)
+
+Filled from the `Milestone 2 thresholds` table in a grounded run's `summary.md`. **Never estimate.**
+
+| # | Check | Threshold | Latest grounded run |
+|---|---|---|---|
+| T8 | Claims with a non-null, complete `source` | 100% | — (needs the registry verified: `year` and `url` are null until then, and this check counts them as incomplete) |
+| T9 | XDOC questions citing at least 2 documents | 100% | — |
+| T10 | NIC questions returning `not_covered` with `searched` filled in | 100% | — |
+| T11 | FILT citations outside the filter document | 0 | — |
+| T12 | RESTR questions declined | 100% | — |
+| T13 | Retrieval document recall@6 | ≥ 0.9643 (baseline) | 0.9643 (run `20261026T035839Z`) |
+| T14 | `claims_dropped` | reported; a rise against the previous run is a regression | — |
+
+## 10. Grounded Run History
+
+| Run ID | Date | Prompt | Model | Mode | Scored | Passed | Notes |
+|---|---|---|---|---|---|---|---|
+| — | — | — | — | — | — | — | — |

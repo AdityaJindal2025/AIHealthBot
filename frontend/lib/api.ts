@@ -1,4 +1,4 @@
-import type { ChatResponse, ConversationOut } from "./types";
+import type { ChatResponse, ConversationOut, DocumentsOut } from "./types";
 
 // Inlined at build time: changing it on Vercel needs a redeploy (EC OPS-05).
 const BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000").replace(/\/+$/, "");
@@ -59,15 +59,21 @@ async function request<T>(path: string, init: RequestInit = {}, signal?: AbortSi
   return (await res.json()) as T;
 }
 
-export function sendMessage(conversationId: string | null, message: string, signal?: AbortSignal) {
-  return request<ChatResponse>(
-    "/api/chat",
-    {
-      method: "POST",
-      body: JSON.stringify(conversationId ? { conversation_id: conversationId, message } : { message }),
-    },
-    signal,
-  );
+export function sendMessage(
+  conversationId: string | null,
+  message: string,
+  documentId: string | null = null,
+  signal?: AbortSignal,
+) {
+  // Optional fields are left out rather than sent as null, so an M1 backend (extra="forbid") still accepts it.
+  const body: Record<string, string> = { message };
+  if (conversationId) body.conversation_id = conversationId;
+  if (documentId) body.document_id = documentId;
+  return request<ChatResponse>("/api/chat", { method: "POST", body: JSON.stringify(body) }, signal);
+}
+
+export function getDocuments(signal?: AbortSignal) {
+  return request<DocumentsOut>("/api/documents", {}, signal);
 }
 
 export function getConversation(id: string, signal?: AbortSignal) {

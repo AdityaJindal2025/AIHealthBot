@@ -8,10 +8,10 @@ import { ArrowRightIcon, ProduceIllustration } from "./Icons";
 import { MessageBubble } from "./MessageBubble";
 
 export const EXAMPLE_QUESTIONS = [
-  "How much protein does a vegetarian adult need?",
-  "How long can cooked rice be left out?",
-  "Which foods are high in vitamin D?",
-  "How many calories are in a banana?",
+  "How long can egg salad stay in the fridge?",
+  "What do the guidelines say about salt?",
+  "How do I defrost meat safely?",
+  "How much free sugar should adults have?",
 ];
 
 type Props = {
@@ -19,10 +19,11 @@ type Props = {
   sending: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onCite?: (messageId: string, chunkId: string) => void;
   onExample: (question: string) => void;
 };
 
-export function MessageList({ messages, sending, selectedId, onSelect, onExample }: Props) {
+export function MessageList({ messages, sending, selectedId, onSelect, onCite, onExample }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,7 +39,7 @@ export function MessageList({ messages, sending, selectedId, onSelect, onExample
           </div>
           <h2 className="mb-3 text-headline-sm text-on-surface">Ask about food, nutrition or food safety</h2>
           <p className="mb-8 max-w-md text-body-sm text-on-surface-variant">
-            Answers come from an AI model and are not yet checked against sources.
+            Answers come only from official guidance documents, with a citation for every claim.
           </p>
           <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
             {EXAMPLE_QUESTIONS.map((q) => (
@@ -62,6 +63,7 @@ export function MessageList({ messages, sending, selectedId, onSelect, onExample
               message={m}
               selected={m.id === selectedId}
               onSelect={m.role === "assistant" && m.scope?.status !== "declined" ? onSelect : undefined}
+              onCite={onCite}
             />
           ))}
           {sending && (

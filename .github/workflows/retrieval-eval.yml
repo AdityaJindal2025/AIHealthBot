@@ -1,0 +1,35 @@
+name: Retrieval eval
+
+# Recall@k and score-floor regression check (FAP §13.2). Free: local embeddings, no API calls.
+on:
+  push:
+    branches: [main]
+    paths: ["backend/app/rag/**", "backend/corpus/**", "evals/retrieval_*", "evals/run_retrieval_eval.py"]
+  pull_request:
+    branches: [main]
+    paths: ["backend/app/rag/**", "backend/corpus/**", "evals/retrieval_*", "evals/run_retrieval_eval.py"]
+  workflow_dispatch:
+
+jobs:
+  retrieval-eval:
+    runs-on: ubuntu-latest
+    env:
+      HF_HOME: ${{ github.workspace }}/.hf-cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install CPU-only torch, then the backend with the embed extra
+        working-directory: backend
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev,embed]"
+      - uses: actions/cache@v4
+        with:
+          path: .hf-cache
+          key: hf-bge-small-en-v1.5
+      - name: Run the retrieval eval (fails below evals/retrieval_baseline.json)
+        run: python evals/run_retrieval_eval.py --no-write

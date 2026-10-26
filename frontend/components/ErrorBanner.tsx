@@ -13,6 +13,10 @@ export function errorText(error: ApiError): string {
   if (error.error === "conversation_turn_limit") {
     return error.detail ?? "This conversation is full. Start a new chat to continue.";
   }
+  if (error.error === "index_not_ready") return "The assistant is starting up, please try again in a minute.";
+  if (error.error === "unknown_document") {
+    return "That document is no longer available, so the filter was reset to all documents. Please try again.";
+  }
   if (error.status === 503) return "The service is temporarily unavailable.";
   return `Something went wrong (${error.error}).`;
 }

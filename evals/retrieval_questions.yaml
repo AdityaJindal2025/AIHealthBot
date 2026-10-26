@@ -1,0 +1,89 @@
+# Labelled retrieval set (FAP §13.2, Phase 4). No model calls: run with evals/run_retrieval_eval.py.
+#
+# APPEND-ONLY. Questions are never edited or removed. To fix one, mark it `deprecated: true`
+# and add a corrected one with a new ID. Labels were written from the documents' content and
+# headings BEFORE looking at retrieval output, so they are not tuned to the system.
+#
+# Entry fields:
+#   id, group, question
+#   group: answerable | xdoc | not_in_corpus | filtered | restricted
+#   expect_documents: [document_id]   documents that hold the answer
+#   match: any | all                  any: one of them in the top k is a hit (default)
+#                                     all: every one should appear (cross-document questions)
+#   expect_ordinals: [[document_id, ordinal]]   a block that should be in a retrieved chunk
+#   document_id                       filter (group: filtered)
+#   expect_restricted                 category the top hit should carry (group: restricted)
+#   deprecated: true                  skipped
+
+questions:
+  # ---- Answerable, one document holds the answer (or any of a few) ----
+  - {id: RQ-01, group: answerable, question: "What percentage of total energy intake should come from free sugars?", expect_documents: [who-healthy-diet, fao-who-healthy-diets]}
+  - {id: RQ-02, group: answerable, question: "How many portions of fruit and vegetables should adults eat each day?", expect_documents: [who-healthy-diet, eatwell-guide]}
+  - {id: RQ-03, group: answerable, question: "Are unsaturated fats better than saturated fats?", expect_documents: [who-healthy-diet, eatwell-guide, fao-who-healthy-diets]}
+  - {id: RQ-04, group: answerable, question: "How should infants be fed in their first six months?", expect_documents: [who-healthy-diet, fao-who-healthy-diets]}
+  - {id: RQ-05, group: answerable, question: "What is WHO doing to promote healthy diets around the world?", expect_documents: [who-healthy-diet]}
+  - {id: RQ-06, group: answerable, question: "What are the four core principles of a healthy diet?", expect_documents: [fao-who-healthy-diets]}
+  - {id: RQ-07, group: answerable, question: "What share of daily calories should come from protein?", expect_documents: [fao-who-healthy-diets]}
+  - {id: RQ-08, group: answerable, question: "Should non-sugar sweeteners be used to control body weight?", expect_documents: [fao-who-healthy-diets]}
+  - {id: RQ-09, group: answerable, question: "Why is eating a diverse range of foods important?", expect_documents: [fao-who-healthy-diets]}
+  - {id: RQ-10, group: answerable, question: "What are the five keys to safer food?", expect_documents: [who-five-keys]}
+  - {id: RQ-11, group: answerable, question: "How do microorganisms get from one place to food?", expect_documents: [who-five-keys]}
+  - {id: RQ-12, group: answerable, question: "What are the symptoms of foodborne disease?", expect_documents: [who-five-keys, kitchen-companion]}
+  - {id: RQ-13, group: answerable, question: "Why should raw and cooked food be kept separate?", expect_documents: [who-five-keys, kitchen-companion]}
+  - {id: RQ-14, group: answerable, question: "How should I wash my hands before handling food?", expect_documents: [kitchen-companion, who-five-keys]}
+  - {id: RQ-15, group: answerable, question: "What is the danger zone for bacteria growth in food?", expect_documents: [kitchen-companion, fsa-chill]}
+  - {id: RQ-16, group: answerable, question: "What internal temperature should ground beef be cooked to?", expect_documents: [kitchen-companion], expect_ordinals: [[kitchen-companion, 178]]}
+  - {id: RQ-17, group: answerable, question: "How long does it take to thaw a frozen turkey in the refrigerator?", expect_documents: [kitchen-companion], expect_ordinals: [[kitchen-companion, 232]]}
+  - {id: RQ-18, group: answerable, question: "Should raw chicken be rinsed before cooking?", expect_documents: [kitchen-companion]}
+  - {id: RQ-19, group: answerable, question: "How long can raw eggs in the shell be kept in the fridge?", expect_documents: [kitchen-companion, cold-food-storage]}
+  - {id: RQ-20, group: answerable, question: "What should I do with frozen food when the power goes out?", expect_documents: [kitchen-companion]}
+  - {id: RQ-21, group: answerable, question: "Is it safe to eat food with mold on it?", expect_documents: [kitchen-companion]}
+  - {id: RQ-22, group: answerable, question: "How do I use a food thermometer correctly?", expect_documents: [kitchen-companion]}
+  - {id: RQ-23, group: answerable, question: "How long can egg salad be kept in the refrigerator?", expect_documents: [cold-food-storage, kitchen-companion], expect_ordinals: [[cold-food-storage, 2]]}
+  - {id: RQ-24, group: answerable, question: "How long can bacon be kept in the freezer?", expect_documents: [cold-food-storage, kitchen-companion]}
+  - {id: RQ-25, group: answerable, question: "How long do leftover soups and stews last in the fridge?", expect_documents: [cold-food-storage, kitchen-companion]}
+  - {id: RQ-26, group: answerable, question: "What temperature should my fridge be set to?", expect_documents: [fsa-chill, kitchen-companion, cold-food-storage, who-five-keys]}
+  - {id: RQ-27, group: answerable, question: "How do I defrost meat safely?", expect_documents: [fsa-chill, kitchen-companion]}
+  - {id: RQ-28, group: answerable, question: "What is freezer burn and is it harmful?", expect_documents: [fsa-chill, kitchen-companion]}
+  - {id: RQ-29, group: answerable, question: "How quickly should leftovers be cooled and put in the fridge?", expect_documents: [fsa-chill, kitchen-companion, who-five-keys]}
+  - {id: RQ-30, group: answerable, question: "Where in the fridge should raw meat be stored?", expect_documents: [fsa-chill, kitchen-companion]}
+  - {id: RQ-31, group: answerable, question: "What does the Eatwell Guide say about potatoes, bread, rice and pasta?", expect_documents: [eatwell-guide]}
+  - {id: RQ-32, group: answerable, question: "How much fluid should I drink each day?", expect_documents: [eatwell-guide]}
+  - {id: RQ-33, group: answerable, question: "How can front-of-pack nutrition labels help me choose healthier food?", expect_documents: [eatwell-guide]}
+  - {id: RQ-34, group: answerable, question: "Who should take vitamin D supplements?", expect_documents: [eatwell-guide]}
+  - {id: RQ-35, group: answerable, question: "How many portions of fish should be eaten each week?", expect_documents: [eatwell-guide]}
+  - {id: RQ-36, group: answerable, question: "What are the 8 tips for eating well?", expect_documents: [eatwell-guide]}
+  - {id: RQ-37, group: answerable, question: "Why should I choose wholegrain foods?", expect_documents: [eatwell-guide]}
+  - {id: RQ-38, group: answerable, question: "What is the maximum daily free sugars intake for children aged 7 to 10?", expect_documents: [eatwell-guide], expect_ordinals: [[eatwell-guide, 71]]}
+  - {id: RQ-39, group: answerable, question: "How should I chill food at home to keep it safe?", expect_documents: [fsa-chill, kitchen-companion]}
+  - {id: RQ-40, group: answerable, question: "How should cutting boards be cleaned after preparing raw meat?", expect_documents: [kitchen-companion, who-five-keys]}
+
+  # ---- Cross-document: every listed document should be retrieved (FPS §4.4 overlap topics) ----
+  - {id: RX-01, group: xdoc, question: "What do the guidelines say about cooking oil and fats?", expect_documents: [eatwell-guide, who-healthy-diet, fao-who-healthy-diets], match: all}
+  - {id: RX-02, group: xdoc, question: "How cold should a fridge be, and how long can food be stored in it?", expect_documents: [fsa-chill, kitchen-companion, cold-food-storage], match: all}
+  - {id: RX-03, group: xdoc, question: "What are the recommendations on sugar intake?", expect_documents: [who-healthy-diet, eatwell-guide, fao-who-healthy-diets], match: all}
+  - {id: RX-04, group: xdoc, question: "What are the recommendations on salt intake?", expect_documents: [who-healthy-diet, eatwell-guide, fao-who-healthy-diets], match: all}
+  - {id: RX-05, group: xdoc, question: "How should food be kept at safe temperatures?", expect_documents: [who-five-keys, kitchen-companion, fsa-chill], match: all}
+
+  # ---- Not in the corpus: the top score should fall below the floor ----
+  - {id: RN-01, group: not_in_corpus, question: "Is intermittent fasting healthy?"}
+  - {id: RN-02, group: not_in_corpus, question: "Is the ketogenic diet effective for losing weight?"}
+  - {id: RN-03, group: not_in_corpus, question: "Do creatine supplements help build muscle?"}
+  - {id: RN-04, group: not_in_corpus, question: "Which brands of oat milk have the most calcium?"}
+  - {id: RN-05, group: not_in_corpus, question: "How much protein is in a cup of cooked quinoa?"}
+  - {id: RN-06, group: not_in_corpus, question: "Is gluten-free bread healthier than regular bread?"}
+  - {id: RN-07, group: not_in_corpus, question: "What are the health benefits of matcha tea?"}
+  - {id: RN-08, group: not_in_corpus, question: "How do I make a sourdough starter?"}
+  - {id: RN-09, group: not_in_corpus, question: "Are seed oils inflammatory?"}
+  - {id: RN-10, group: not_in_corpus, question: "What is the glycemic index of white rice?"}
+  - {id: RN-11, group: not_in_corpus, question: "Which vitamins are found in kale?"}
+
+  # ---- Filtered to one document ----
+  - {id: RF-01, group: filtered, document_id: fsa-chill, question: "How should I defrost meat?", expect_documents: [fsa-chill]}
+  - {id: RF-02, group: filtered, document_id: kitchen-companion, question: "What temperature should leftovers be reheated to?", expect_documents: [kitchen-companion]}
+  - {id: RF-03, group: filtered, document_id: who-five-keys, question: "Why should I keep my kitchen clean?", expect_documents: [who-five-keys]}
+  - {id: RF-04, group: filtered, document_id: eatwell-guide, question: "What does the guide say about salt?", expect_documents: [eatwell-guide]}
+
+  # ---- Restricted corpus content: the top hit should be a restricted chunk ----
+  - {id: RR-01, group: restricted, question: "How many calories does a 10-year-old boy need each day?", expect_restricted: calorie_target}
+  - {id: RR-02, group: restricted, question: "What are the daily energy requirements for girls by age?", expect_restricted: calorie_target}

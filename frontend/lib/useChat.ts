@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ApiError, getConversation, sendMessage } from "./api";
-import type { ChatMessage, MessageOut } from "./types";
+import { ApiError, getConversation, getDocuments, sendMessage } from "./api";
+import type { ChatMessage, DocumentOut, MessageOut } from "./types";
 
 const STORAGE_KEY = "nutrition-assistant.conversation-id";
+// The "Search in" document filter is remembered per conversation (FAP §12).
+const FILTER_KEY_PREFIX = "nutrition-assistant.document-filter.";
 
 function readStoredId(): string | null {
   try {
@@ -24,9 +26,37 @@ function writeStoredId(id: string | null) {
   }
 }
 
-function fromServer(m: MessageOut): ChatMessage {
-  return { id: m.id, role: m.role, content: m.content, claims: m.claims ?? [], scope: m.scope };
+function readStoredFilter(conversationId: string): string | null {
+  try {
+    return window.localStorage.getItem(FILTER_KEY_PREFIX + conversationId);
+  } catch {
+    return null;
+  }
 }
+
+function writeStoredFilter(conversationId: string, documentId: string | null) {
+  try {
+    if (documentId) window.localStorage.setItem(FILTER_KEY_PREFIX + conversationId, documentId);
+    else window.localStorage.removeItem(FILTER_KEY_PREFIX + conversationId);
+  } catch {
+    // ignore: the filter still applies for this page view
+  }
+}
+
+function fromServer(m: MessageOut): ChatMessage {
+  return {
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    claims: m.claims ?? [],
+    scope: m.scope,
+    grounding: m.grounding ?? null,
+    sources: m.sources ?? [],
+  };
+}
+
+/** The chunk the user asked to see, from a citation chip. */
+export type FocusedSource = { messageId: string; chunkId: string };
 
 export type ChatErrorState = { error: ApiError; message: string };
 
@@ -37,11 +67,38 @@ export function useChat() {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState<ChatErrorState | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [focused, setFocused] = useState<FocusedSource | null>(null);
+  const [documents, setDocuments] = useState<DocumentOut[]>([]);
+  const [documentId, setDocumentIdState] = useState<string | null>(null);
 
   // Each "New chat" starts a new epoch; a response from an older epoch is dropped (EC FE-03).
   const epoch = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
   const conversationRef = useRef<string | null>(null);
+  const documentRef = useRef<string | null>(null);
+
+  // The document list is loaded once. If it fails (or an M1 backend has no endpoint) the filter is hidden.
+  useEffect(() => {
+    const controller = new AbortController();
+    getDocuments(controller.signal).then(
+      (res) => setDocuments(res.documents),
+      () => {},
+    );
+    return () => controller.abort();
+  }, []);
+
+  const setDocumentId = useCallback((id: string | null) => {
+    documentRef.current = id;
+    setDocumentIdState(id);
+    if (conversationRef.current) writeStoredFilter(conversationRef.current, id);
+  }, []);
+
+  // A stored filter for a document that no longer exists is dropped.
+  useEffect(() => {
+    if (documents.length && documentRef.current && !documents.some((d) => d.document_id === documentRef.current)) {
+      setDocumentId(null);
+    }
+  }, [documents, setDocumentId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -54,6 +111,9 @@ export function useChat() {
           conversationRef.current = conv.id;
           setConversationId(conv.id);
           setMessages(conv.messages.map(fromServer));
+          const filter = readStoredFilter(conv.id);
+          documentRef.current = filter;
+          setDocumentIdState(filter);
         } catch (err) {
           // Unknown ID (DB reset, other environment): start fresh, no error loop (EC FE-01).
           if (err instanceof ApiError && err.status === 404) writeStoredId(null);
@@ -77,19 +137,32 @@ export function useChat() {
       setError(null);
       setSending(true);
       const tempId = `local-${Date.now()}`;
-      setMessages((prev) => [...prev, { id: tempId, role: "user", content: message, claims: [], scope: null }]);
+      setMessages((prev) => [
+        ...prev,
+        { id: tempId, role: "user", content: message, claims: [], scope: null, grounding: null, sources: [] },
+      ]);
 
       try {
-        const res = await sendMessage(conversationRef.current, message, controller.signal);
+        const res = await sendMessage(conversationRef.current, message, documentRef.current, controller.signal);
         if (epoch.current !== myEpoch) return;
         conversationRef.current = res.conversation_id;
         setConversationId(res.conversation_id);
         writeStoredId(res.conversation_id);
+        writeStoredFilter(res.conversation_id, documentRef.current);
         setMessages((prev) => [
           ...prev,
-          { id: res.message_id, role: "assistant", content: res.answer, claims: res.claims, scope: res.scope },
+          {
+            id: res.message_id,
+            role: "assistant",
+            content: res.answer,
+            claims: res.claims,
+            scope: res.scope,
+            grounding: res.grounding ?? null,
+            sources: res.sources ?? [],
+          },
         ]);
         setSelectedId(res.message_id);
+        setFocused(null);
       } catch (err) {
         if (epoch.current !== myEpoch || controller.signal.aborted) return;
         const apiError = err instanceof ApiError ? err : new ApiError(0, "network_error");
@@ -97,6 +170,8 @@ export function useChat() {
         if (apiError.status === 429 || apiError.status === 422 || apiError.status === 0) {
           setMessages((prev) => prev.filter((m) => m.id !== tempId));
         }
+        // The chosen document was removed from the registry: fall back to all documents.
+        if (apiError.error === "unknown_document") setDocumentId(null);
         setError({ error: apiError, message });
       } finally {
         if (epoch.current === myEpoch) {
@@ -105,7 +180,7 @@ export function useChat() {
         }
       }
     },
-    [],
+    [setDocumentId],
   );
 
   const retry = useCallback(() => {
@@ -129,8 +204,22 @@ export function useChat() {
     setConversationId(null);
     setMessages([]);
     setSelectedId(null);
+    setFocused(null);
+    documentRef.current = null;
+    setDocumentIdState(null);
     setError(null);
     setSending(false);
+  }, []);
+
+  /** A citation chip was clicked: select its message and the chunk it cites. */
+  const focusSource = useCallback((messageId: string, chunkId: string) => {
+    setSelectedId(messageId);
+    setFocused({ messageId, chunkId });
+  }, []);
+
+  const select = useCallback((id: string) => {
+    setSelectedId(id);
+    setFocused(null);
   }, []);
 
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant") ?? null;
@@ -143,7 +232,12 @@ export function useChat() {
     loadingHistory,
     error,
     selected,
-    select: setSelectedId,
+    select,
+    focusedChunkId: focused && selected && focused.messageId === selected.id ? focused.chunkId : null,
+    focusSource,
+    documents,
+    documentId,
+    setDocumentId,
     send,
     retry,
     newChat,
