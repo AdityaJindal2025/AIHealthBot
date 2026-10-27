@@ -48,12 +48,25 @@ class ChatError(Exception):
     """An error with its HTTP status and `ErrorResponse` body."""
 
     def __init__(self, status_code: int, error: str, *, failure_id: uuid.UUID | None = None,
-                 detail: str | None = None) -> None:
+                 detail: str | None = None, retry_after: int | None = None) -> None:
         super().__init__(error)
         self.status_code = status_code
         self.error = error
         self.failure_id = failure_id
         self.detail = detail
+        self.retry_after = retry_after
+
+
+UPSTREAM_RATE_LIMITED = "upstream_rate_limited"
+DEFAULT_RETRY_AFTER_S = 30
+
+
+def _model_error(failure: ModelFailure) -> ChatError:
+    """502 for a bad or missing model answer; 503 + Retry-After when the provider is rate limiting."""
+    if failure.type == "rate_limited":
+        return ChatError(503, UPSTREAM_RATE_LIMITED, failure_id=failure.failure_id, detail=failure.type,
+                         retry_after=failure.retry_after or DEFAULT_RETRY_AFTER_S)
+    return ChatError(502, "model_output_invalid", failure_id=failure.failure_id, detail=failure.type)
 
 
 @dataclass
@@ -169,7 +182,7 @@ def _handle(db: Session, req: ChatRequest, ctx: dict[str, Any]) -> ChatResponse:
             conversation_id=conv.id,
         )
         ctx.update(failure_type=failure.type, failure_id=str(failure.failure_id) if failure.failure_id else None)
-        raise ChatError(502, "model_output_invalid", failure_id=failure.failure_id, detail=failure.type) from failure
+        raise _model_error(failure) from failure
 
     ctx.update(model=result.model, latency_ms=result.latency_ms, input_tokens=result.input_tokens,
                output_tokens=result.output_tokens)
@@ -298,7 +311,7 @@ def _handle_grounded(db: Session, conversation_id: uuid.UUID, req: ChatRequest, 
 
     def fail(type_: str, detail: str, raw_output: str | None, retrieval: RetrievalResult | None,
              extra: dict[str, Any] | None = None, dropped=None, status: int = 502,
-             error: str = "model_output_invalid") -> ChatError:
+             error: str = "model_output_invalid", retry_after: int | None = None) -> ChatError:
         failure_id = record_failure(db, type=type_, detail=detail, raw_output=raw_output,
                                     context={**base_context, **(extra or {})}, conversation_id=conversation_id)
         if retrieval is not None:
@@ -306,7 +319,7 @@ def _handle_grounded(db: Session, conversation_id: uuid.UUID, req: ChatRequest, 
         if dropped and failure_id is not None:
             repo.record_citation_events(db, message_id=None, failure_id=failure_id, events=_citation_events(dropped))
         ctx.update(failure_type=type_, failure_id=str(failure_id) if failure_id else None)
-        return ChatError(status, error, failure_id=failure_id, detail=type_)
+        return ChatError(status, error, failure_id=failure_id, detail=type_, retry_after=retry_after)
 
     # 4. Retrieve. The previous question rides along for short follow-ups (FAP §7.3).
     try:
@@ -342,6 +355,10 @@ def _handle_grounded(db: Session, conversation_id: uuid.UUID, req: ChatRequest, 
     except ModelFailure as failure:
         extra = {"model": failure.model or settings.MODEL_ID, "latency_ms": failure.latency_ms,
                  "history_turns": len(history.model_turns)}
+        if failure.type == "rate_limited":
+            raise fail(failure.type, failure.detail, None, retrieval, extra, status=503,
+                       error=UPSTREAM_RATE_LIMITED,
+                       retry_after=failure.retry_after or DEFAULT_RETRY_AFTER_S) from failure
         raise fail(failure.type, failure.detail, failure.raw_output, retrieval, extra) from failure
     usage = {"model": result.model, "latency_ms": result.latency_ms, "input_tokens": result.input_tokens,
              "output_tokens": result.output_tokens}

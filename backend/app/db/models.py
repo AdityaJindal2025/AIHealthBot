@@ -92,7 +92,7 @@ class Failure(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("conversations.id"), nullable=True)
     # schema_invalid | model_refusal | truncated_output | api_error, and in M2:
-    # no_valid_claims | missing_citation | retrieval_error | embedding_error
+    # no_valid_claims | missing_citation | retrieval_error | embedding_error | rate_limited (provider 429)
     type: Mapped[str] = mapped_column(String(32), nullable=False)
     error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_output: Mapped[str | None] = mapped_column(Text, nullable=True)

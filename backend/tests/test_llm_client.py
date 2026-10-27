@@ -109,8 +109,22 @@ def _req():
     return httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
 
 
+def test_rate_limit_is_its_own_failure_type_with_retry_after(sdk):
+    response = httpx.Response(429, request=_req(), headers={"retry-after": "17"})
+    sdk.side_effect = groq.RateLimitError("rate", response=response, body=None)
+    with pytest.raises(ModelFailure) as e:
+        llm.generate([], "q")
+    assert (e.value.type, e.value.retry_after) == ("rate_limited", 17)
+
+
+def test_rate_limit_without_retry_after_header(sdk):
+    sdk.side_effect = groq.RateLimitError("rate", response=httpx.Response(429, request=_req()), body=None)
+    with pytest.raises(ModelFailure) as e:
+        llm.generate([], "q")
+    assert (e.value.type, e.value.retry_after) == ("rate_limited", None)
+
+
 @pytest.mark.parametrize("exc", [
-    groq.RateLimitError("rate", response=httpx.Response(429, request=_req()), body=None),
     groq.APIStatusError("boom", response=httpx.Response(503, request=_req()), body=None),
     groq.NotFoundError("model", response=httpx.Response(404, request=_req()), body=None),
     groq.BadRequestError("schema", response=httpx.Response(400, request=_req()), body=None),
@@ -234,3 +248,9 @@ def test_grounded_api_error(sdk, v2):
     with pytest.raises(ModelFailure) as e:
         llm.generate_grounded([], "q")
     assert e.value.type == "api_error"
+
+
+def test_grounded_call_uses_smaller_token_cap(sdk, v2):
+    sdk.return_value = fake_response(json.dumps(GROUNDED))
+    llm.generate_grounded([], "q")
+    assert sdk.call_args.kwargs["max_completion_tokens"] == llm.GROUNDED_MAX_TOKENS < llm.MAX_TOKENS

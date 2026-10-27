@@ -90,7 +90,7 @@ flowchart LR
 
 ### Tasks
 - [x] Move `Docs/blocks.json` to `backend/corpus/blocks.jsonl` (it is JSON Lines). Keep **one** copy. Update the file pointer in FPS §3 and the key-files table in CTX §14.
-- [ ] Write `backend/corpus/documents.json` *(status 2026-10-26: written with candidate `title` / `publisher`, `year` and `url` left `null`, nothing verified yet; see `backend/corpus/README.md`)*: one entry per `document_id` with the FAP §4.2 fields (`title`, `publisher`, `publisher_short`, `year`, `url`, `aliases`, `publisher_aliases`, `verified_by`, `verified_on`).
+- [x] Write `backend/corpus/documents.json` *(status 2026-10-27: every entry verified against the publisher's page or PDF; evidence in `backend/corpus/README.md`)*: one entry per `document_id` with the FAP §4.2 fields (`title`, `publisher`, `publisher_short`, `year`, `url`, `aliases`, `publisher_aliases`, `verified_by`, `verified_on`).
   - `year` and `url` are copied **from the published document** by the named verifier. Never fill them from model memory (FPS §3.3).
   - Until verified, leave `verified_by` empty; the build refuses such entries in production.
 - [x] `backend/app/config.py`: add `CORPUS_DIR` (default `corpus`) and `ALLOW_UNVERIFIED_REGISTRY` (default `false`).
@@ -484,7 +484,7 @@ flowchart LR
 
 ## Phase 10: Production Deploy
 
-> **Status (2026-10-26):** Code done: Dockerfile (CPU torch, baked model, corpus, index build at start) and `healthcheckTimeout` 300. **Open:** everything on Railway and Vercel. Deploy is blocked until the registry is verified, because the production build refuses it.
+> **Status (2026-10-26):** Code done: Dockerfile (CPU torch, baked model, corpus, index build at start) and `healthcheckTimeout` 300. **Open:** everything on Railway and Vercel. The registry is verified (2026-10-27), so the production index build accepts it.
 
 **Goal:** the grounded assistant runs at the same public URLs (FPS §7, FAP §15). Backend first, because the envelope is backwards compatible.
 

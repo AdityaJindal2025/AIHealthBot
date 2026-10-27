@@ -55,10 +55,12 @@ def test_fixture_corpus_loads_in_production_mode():
     assert table.header == ("Food", "Fridge", "Freezer") and len(table.rows) == 3
 
 
-def test_real_registry_entries_need_verification_before_production():
-    # Until a person verifies the registry (corpus/README.md), production mode must refuse it.
-    problems = _problems(DEFAULT_CORPUS_DIR)
-    assert any("not verified" in p for p in problems)
+def test_real_registry_is_verified_for_production():
+    # Every citation shows year and link (FPS §4.3), so the committed registry must load in production
+    # mode. A new or edited entry needs the same verification (corpus/README.md).
+    corpus = load_corpus(DEFAULT_CORPUS_DIR, allow_unverified=False)
+    for doc in corpus.documents.values():
+        assert doc.verified and doc.year and doc.url and doc.url.startswith("https://"), doc.document_id
 
 
 def test_duplicate_ordinal(corpus_dir):

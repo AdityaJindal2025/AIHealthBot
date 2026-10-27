@@ -73,8 +73,7 @@ cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -e ".[embed]"   # local embedding model
-# create backend/.env with the variables below (at least GROQ_API_KEY; ALLOW_UNVERIFIED_REGISTRY=true until
-# the registry is verified, see backend/corpus/README.md)
+# create backend/.env with the variables below (at least GROQ_API_KEY)
 alembic upgrade head
 python -m app.rag.build_index --if-changed   # chunk, tag, embed, store; skips if the index is current
 uvicorn app.main:app --reload            # http://localhost:8000/api/health
@@ -156,7 +155,7 @@ The `Evals` GitHub workflow runs the suite against a deployed URL. It is manual-
 - **Postgres:** Railway Postgres needs the `vector` extension. Check that `CREATE EXTENSION vector` works, or move to Railway's pgvector template.
 - **Railway variables:** add `RAG_ENABLED=true`, `PROMPT_VERSION=v2`, the retrieval settings above and `ALLOW_UNVERIFIED_REGISTRY=false`.
 - **Memory:** the embedder and torch need roughly 0.5–1 GB more RAM, so check the plan.
-- **Registry:** the production start fails until every registry entry is verified (`backend/corpus/README.md`).
+- **Registry:** verified on 2026-10-27 (`backend/corpus/README.md`). Any new or edited entry must be verified again, or the production start fails.
 - **Kill switch:** set `RAG_ENABLED=false` and `PROMPT_VERSION=v1`. Migration `0002` is additive, so the M1 image also runs on the M2 schema.
 
 **Steps:**

@@ -19,6 +19,24 @@ For each entry, a person opens the **original published document** and:
 
 The loader refuses any entry without `verified_by`, or without an integer `year` and an `https://` `url`, unless `ALLOW_UNVERIFIED_REGISTRY=true`. That setting is for local development only and is never set on Railway.
 
+### Verification record (2026-10-27)
+
+Done by Claude Code (an AI assistant) at Aditya Jindal's request. Each value comes from the publisher's own page or PDF, fetched on that date, **not from model memory**. To confirm the corpus was taken from that edition, the first 60 characters of every corpus paragraph and list item longer than 80 characters were looked up in the text of the official PDF. A person can repeat any row by opening the link.
+
+| `document_id` | Year | Evidence for year and publisher | Corpus matches the official text |
+|---|---|---|---|
+| `who-healthy-diet` | 2018 | WHO publication page (dated 30 August 2018); the PDF header reads "FACT SHEET N°394 UPDATED AUGUST 2018" | 55/55 paragraphs |
+| `fao-who-healthy-diets` | 2024 | WHO publication page: published 24 October 2024, ISBN 978-92-4-010187-6, editors WHO and FAO | 67/67 paragraphs |
+| `who-five-keys` | 2006 | WHO publication page: published 15 May 2006, ISBN 9789241594639 | 76/84 exact; the other 8 are PDF column-extraction artefacts (7 found mid-paragraph) |
+| `eatwell-guide` | 2018 | The booklet credits "Public Health England in association with the Welsh Government, Food Standards Scotland and the Food Standards Agency in Northern Ireland", with back matter "© Crown copyright 2018, September 2018 v4". It is listed on gov.uk/government/publications/the-eatwell-guide, which since 2021 is maintained by OHID, PHE's successor | 59/59 paragraphs |
+| `fsa-chill` | 2017 | gov.uk page by the Food Standards Agency, "Published 18 December 2017"; the headings and phrases match | Checked by headings and key phrases (web page, not a PDF) |
+| `kitchen-companion` | 2015 | The FSIS PDF reads "February 2008 / Slightly Revised March 2015" (read from the Internet Archive copy of the FSIS URL, because fsis.usda.gov blocks automated requests) | 284/284 against the 2015 revision, versus 213/284 against the 2008 GovInfo edition, so the corpus is the 2015 revision |
+| `cold-food-storage` | 2023 | The page title is "Cold Food Storage Chart \| FoodSafety.gov", the site is managed by HHS, and the page says "Date Last Reviewed September 19, 2023" (read from the Internet Archive copy, because foodsafety.gov blocks automated requests) | The opening sentence and first rows match |
+
+Notes for a human reviewer:
+- **`eatwell-guide` publisher:** it stays **Public Health England**, as printed on the booklet the corpus came from, even though gov.uk now lists OHID.
+- **`kitchen-companion` and `cold-food-storage`:** the URLs are the publishers' own. They were read through archive copies taken on 27 February 2024 and 29 December 2025 respectively; worth one click to confirm they still load.
+
 `aliases` are lowercase names a user might type to mean that document (used to filter retrieval to it). `publisher_aliases` are names of the publisher, used to catch a claim attributed to the wrong publisher.
 
 ## Vendored tokenizer

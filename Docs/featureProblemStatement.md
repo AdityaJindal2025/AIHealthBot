@@ -184,19 +184,19 @@ Validate the model's `chunk_id` / `document_id` against the chunks **actually re
 ## 7. Acceptance Checklist
 
 - [x] Corpus loaded from `backend/corpus/blocks.jsonl`, formerly `Docs/blocks.json` (7 documents) *(evidence: `backend/app/rag/corpus.py`, `tests/test_corpus.py`)*
-- [ ] Document registry with verified title, publisher, year and URL for each `document_id` *(open: `year` and `url` are null and nothing is verified yet; see `backend/corpus/README.md`)*
+- [x] Document registry with verified title, publisher, year and URL for each `document_id` *(evidence: `backend/corpus/documents.json` + verification record in `backend/corpus/README.md`, 2026-10-27)*
 - [x] Structure-aware chunking: tables and numbered/list recommendations are not split mid-item *(evidence: `backend/app/rag/chunker.py`, `tests/test_chunker.py`, `backend/corpus/build_report.md`)*
-- [ ] Every chunk carries document name, publisher, year and section heading *(open: the fields exist on every chunk, but `year` is null until the registry is verified)*
+- [x] Every chunk carries document name, publisher, year and section heading *(evidence: `Chunk` record in `app/rag/chunker.py`, verified registry, `build_report.md`)*
 - [x] Vector index built; retrieval works across all documents and filtered to one document *(evidence: `app/rag/build_index.py`, `app/rag/retriever.py`, `tests/test_retriever.py`, `evals/retrieval_runs/20261026T035839Z`)*
 - [ ] Answers use retrieved chunks only *(built: system_v2 prompt + citation checks; open: needs a real-model grounded run and the citation review)*
-- [ ] Every claim has a citation (name, publisher, year, link); uncited claims are blocked in code *(built: uncited claims are blocked in code; open: year and link need the verified registry)*
+- [ ] Every claim has a citation (name, publisher, year, link); uncited claims are blocked in code *(built: uncited claims are blocked in code, and sources carry the verified year and link; open: confirm T8 = 100% in a real grounded run)*
 - [x] Citations are checked against the chunks retrieved for that request *(evidence: `app/rag/citations.py`, `tests/test_citations.py`, `tests/test_rag_api.py`)*
 - [x] Cross-document questions are answered per document with separate citations, never blended *(evidence: `app/rag/composer.py` builds one block per document; blend phrases dropped by `OUT-BLEND-01`; `tests/test_composer.py`)*
 - [x] Disagreements show both sources with publisher and year, with no winner picked *(evidence: the composer never merges or ranks blocks; ranking phrases are dropped by `OUT-BLEND-01`)*
 - [x] "Not in corpus" refusal names what was searched *(evidence: `compose_not_covered`, `grounding.searched`; `tests/test_rag_api.py`)*
 - [x] "Out of scope" refusal is enforced in code and refers the person to a professional, even when retrieved text contains kcal or weight figures *(evidence: `app/rag/tagger.py` + retrieval-stage decline; restricted chunks are never sent to the model; `tests/test_tagger.py`, `tests/test_rag_api.py`)*
 - [x] Sources panel shows the chunks behind each answer *(evidence: `frontend/components/SourcesPanel.tsx`, `frontend/__tests__/components.test.tsx`)*
-- [ ] `claims[].source` holds a real citation; any schema change is documented *(schema change documented in README; open: year and URL need the verified registry)*
+- [ ] `claims[].source` holds a real citation; any schema change is documented *(schema change documented in README; open: confirm with a real grounded run)*
 - [x] README states the chunking strategy and its cost, chunk size, overlap, embedding model, index type and k *(evidence: README "Retrieval parameters")*
 - [ ] Regression question set extended with grounded, cross-document, not-in-corpus and out-of-scope cases, and re-run after every change *(extended: 28 questions in 6 new groups; open: no grounded real-model run yet)*
 - [ ] Still deployed at the public URL *(open: Phase 10 deploy)*

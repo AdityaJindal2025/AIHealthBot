@@ -224,3 +224,20 @@ def test_api_key_never_logged(client, generate, caplog):
     fmt = RedactingJsonFormatter("%(message)s")
     rendered = "\n".join(fmt.format(r) for r in caplog.records)
     assert "gsk_test-not-a-real-key" not in rendered
+
+
+def test_provider_rate_limit_is_503_with_retry_after(client, db, generate):
+    generate.state["next"] = ModelFailure("rate_limited", "status=429", retry_after=12)
+    r = post(client, "Are lentils healthy?")
+    assert r.status_code == 503
+    assert r.headers["retry-after"] == "12"
+    body = r.json()
+    assert body["error"] == "upstream_rate_limited" and body["detail"] == "rate_limited"
+    failure = db.scalars(select(Failure)).one()  # still recorded, never hidden (Rule 6)
+    assert failure.type == "rate_limited" and str(failure.id) == body["failure_id"]
+
+
+def test_provider_rate_limit_without_header_gets_default_retry_after(client, generate):
+    generate.state["next"] = ModelFailure("rate_limited", "status=429")
+    r = post(client, "Are lentils healthy?")
+    assert r.status_code == 503 and r.headers["retry-after"] == "30"

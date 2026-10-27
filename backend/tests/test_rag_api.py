@@ -325,3 +325,13 @@ def test_grounding_survives_as_json(db, client, rag, model):
     post(client, "How much salt should adults eat a day?")
     stored = db.scalars(select(Message).where(Message.role == "assistant")).one()
     assert json.loads(json.dumps(stored.grounding))["status"] == "grounded"
+
+
+def test_provider_rate_limit_in_grounded_mode_is_503(client, db, rag, model):
+    model.state["answer"] = ModelFailure("rate_limited", "status=429", retry_after=20)
+    r = post(client, "How much salt should adults eat a day?")
+    assert r.status_code == 503 and r.headers["retry-after"] == "20"
+    assert r.json()["error"] == "upstream_rate_limited"
+    failure = db.scalars(select(Failure)).one()
+    assert failure.type == "rate_limited"
+    assert db.scalars(select(Retrieval)).one().failure_id == failure.id

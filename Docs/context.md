@@ -218,15 +218,15 @@ Dependencies: 2 → {3, 4, 5}; {3, 4, 5} → 6; 6 → {7, 8}; {7, 8} → 9 → 1
 | Backend (contract, DB, model client, guards, chat API, rate limit, logging) | Code present in `backend/app/`, with tests in `backend/tests/` |
 | Frontend (all components + `useChat`, `api.ts`, `types.ts`) | Code present in `frontend/` |
 | Prompt | `system_v1.md` (M1) and `system_v2.md` (grounded) + `CHANGELOG.md` |
-| Evals | 83-entry question set (28 Milestone 2 questions) and runner with M1/M2 modes. **3 M1 runs committed, all against a local `stub-model`. No real-model run yet, M1 or M2** |
+| Evals | 83-entry question set (28 Milestone 2 questions); the runner has M1/M2 modes and retries provider rate limits. Real-model runs on 2026-10-27: M1 `20261027T034207Z_v1` (41/47 passed, drift 17/55) and grounded `20261027T035318Z_v2` (56/75 passed, T8–T12 met, drift 6/83). 16 grounded questions hit Groq's rate limit and need a re-run |
 | Milestone 2 code | Built ([featureImplementationPlan.md](featureImplementationPlan.md) Phases 1–9). Corpus and registry, chunker, tagger, embedder, pgvector/SQLite store, migration `0002_rag`, retriever, citation checks, composer, grounded chat flow, `/api/documents`, frontend sources panel and filter. 392 backend and 22 frontend tests pass |
 | Retrieval eval | Run `evals/retrieval_runs/20261026T035839Z`: doc recall@6 0.964, MRR 0.99, k=6, cap 2, floor 0.73 |
-| Registry | `backend/corpus/documents.json` has `year` and `url` null and nothing verified. The production index build refuses it, so it **blocks deploy** |
+| Registry | Verified on 2026-10-27 against each publisher's page or PDF, with evidence in `backend/corpus/README.md`. It loads in production mode |
 | Deploy | **Not yet** (M1 or M2) |
 | [evalResults.md](evalResults.md), [failureLog.md](failureLog.md) | M1 sections are templates. M2 sections hold the real retrieval run and pre-model findings only. Fill the rest from real runs, never estimate |
 | `m1` / `m2` tags | Not created |
 
-Remaining: verify the registry → real-model M1 baseline run (`RAG_ENABLED=false PROMPT_VERSION=v1`) → grounded run (`v2`) → Railway (pgvector, new image) and Vercel deploy → production eval run → citation review and failure log → tick FPS §7 → tags.
+Remaining: real-model M1 baseline run (`RAG_ENABLED=false PROMPT_VERSION=v1`) → grounded run (`v2`) → Railway (pgvector, new image) and Vercel deploy → production eval run → citation review and failure log → tick FPS §7 → tags.
 
 ---
 

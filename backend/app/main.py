@@ -75,7 +75,8 @@ def create_app() -> FastAPI:
     # Every error uses the ErrorResponse shape (EC FE-07).
     @app.exception_handler(ChatError)
     async def chat_error_handler(_: Request, exc: ChatError) -> JSONResponse:
-        return _error(exc.status_code, exc.error, failure_id=exc.failure_id, detail=exc.detail)
+        headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after else None
+        return _error(exc.status_code, exc.error, failure_id=exc.failure_id, detail=exc.detail, headers=headers)
 
     @app.exception_handler(RequestValidationError)
     async def validation_handler(_: Request, exc: RequestValidationError) -> JSONResponse:

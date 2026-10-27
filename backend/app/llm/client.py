@@ -34,6 +34,9 @@ from app.schemas.model_output import AssistantOutput, GroundedOutput, Ungrounded
 log = logging.getLogger("app.llm")
 
 MAX_TOKENS = 16000
+# A grounded answer is at most 8 short claims (observed: 130–480 output tokens). The cap leaves room
+# for reasoning tokens while keeping each call small against the provider's token-rate limits.
+GROUNDED_MAX_TOKENS = 4000
 TIMEOUT_S = 60
 MAX_RETRIES = 2
 REASONING_EFFORT = "low"
@@ -118,7 +121,15 @@ class _Completion:
     output_tokens: int | None
 
 
-def _complete(messages: list[dict], schema_name: str, schema: dict) -> _Completion:
+def _retry_after(e: groq.APIStatusError) -> int | None:
+    value = e.response.headers.get("retry-after") if e.response is not None else None
+    try:
+        return max(1, int(float(value))) if value else None
+    except ValueError:
+        return None
+
+
+def _complete(messages: list[dict], schema_name: str, schema: dict, max_tokens: int = MAX_TOKENS) -> _Completion:
     """One strict-schema chat completion. Maps every SDK error and bad finish to `ModelFailure`."""
     model_id = get_settings().MODEL_ID
     start = time.monotonic()
@@ -130,7 +141,7 @@ def _complete(messages: list[dict], schema_name: str, schema: dict) -> _Completi
         response = get_client().chat.completions.create(
             model=model_id,
             messages=messages,
-            max_completion_tokens=MAX_TOKENS,
+            max_completion_tokens=max_tokens,
             reasoning_effort=REASONING_EFFORT,
             # Reasoning goes in a separate field we never use; leave it out of the response.
             include_reasoning=False,
@@ -140,8 +151,9 @@ def _complete(messages: list[dict], schema_name: str, schema: dict) -> _Completi
             },
         )
     except groq.RateLimitError as e:
-        raise ModelFailure("api_error", f"rate_limited status={e.status_code}", model=model_id,
-                           latency_ms=elapsed()) from e
+        # The SDK has already retried (max_retries); the provider is still refusing.
+        raise ModelFailure("rate_limited", f"status={e.status_code}", model=model_id, latency_ms=elapsed(),
+                           retry_after=_retry_after(e)) from e
     except groq.APIStatusError as e:
         raise ModelFailure("api_error", f"status={e.status_code} {e.message}", model=model_id,
                            latency_ms=elapsed()) from e
@@ -170,7 +182,7 @@ def _complete(messages: list[dict], schema_name: str, schema: dict) -> _Completi
         raise ModelFailure("model_refusal", f"finish_reason={finish_reason} refusal={refusal!r}", raw_text,
                            model=served_model, latency_ms=latency_ms)
     if finish_reason == "length":
-        raise ModelFailure("truncated_output", f"max_completion_tokens={MAX_TOKENS}", raw_text, model=served_model,
+        raise ModelFailure("truncated_output", f"max_completion_tokens={max_tokens}", raw_text, model=served_model,
                            latency_ms=latency_ms)
     if finish_reason != "stop":
         # Never assume only a few values exist (EC LLM-04).
@@ -223,7 +235,7 @@ def generate_grounded(history: list[Turn], user_turn: str) -> GroundedResult:
     settings = get_settings()
     messages = [{"role": "system", "content": load_system_prompt(settings.PROMPT_VERSION)}]
     messages += build_messages(history, user_turn, settings.HISTORY_TURNS)
-    done = _complete(messages, "grounded_output", GROUNDED_OUTPUT_JSON_SCHEMA)
+    done = _complete(messages, "grounded_output", GROUNDED_OUTPUT_JSON_SCHEMA, GROUNDED_MAX_TOKENS)
     try:
         output = validate_grounded(done.raw_text)
     except (ValidationError, json.JSONDecodeError, ValueError) as e:

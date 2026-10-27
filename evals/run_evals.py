@@ -178,6 +178,30 @@ def detect_mode(base_url: str) -> str:
     return "m2" if "index" in body else "m1"
 
 
+UPSTREAM_RATE_LIMITED = "upstream_rate_limited"
+# Seconds between requests. Grounded calls carry ~2–3k tokens of sources, so they need a slower pace to
+# stay under the model provider's tokens-per-minute limit, not just the backend's 20/min.
+DEFAULT_DELAY = {"m1": 3.5, "m2": 10.0}
+MAX_DELAY = 30.0
+
+
+def is_upstream_rate_limited(r: httpx.Response) -> bool:
+    if r.status_code != 503:
+        return False
+    try:
+        return r.json().get("error") == UPSTREAM_RATE_LIMITED
+    except ValueError:
+        return False
+
+
+def retry_wait(r: httpx.Response, attempt: int) -> float:
+    """The server's Retry-After when it sends one, otherwise exponential backoff; capped at 120 s."""
+    try:
+        return min(120.0, float(r.headers["retry-after"]))
+    except (KeyError, ValueError):
+        return min(60.0, 5 * 2 ** (attempt - 1))
+
+
 class Runner:
     def __init__(self, base_url: str, delay: float, max_429_retries: int = 5, m2: bool = False):
         self.m2 = m2
@@ -185,6 +209,11 @@ class Runner:
         self.delay = delay
         self.max_429_retries = max_429_retries
         self._last = 0.0
+
+    def slow_down(self) -> None:
+        """After a rate limit, keep a slower pace for the rest of the run."""
+        self.delay = min(MAX_DELAY, self.delay * 1.5)
+        print(f"  rate limited: waiting, then pacing at one request every {self.delay:.1f}s", flush=True)
 
     def _throttle(self) -> None:
         wait = self._last + self.delay - time.monotonic()
@@ -209,9 +238,11 @@ class Runner:
                                   error={"error": "network_error", "detail": str(e)}, rate_limit_retries=retries,
                                   document_id=document_id)
             latency = int((time.monotonic() - start) * 1000)
-            if r.status_code == 429 and retries < self.max_429_retries:
+            limited = r.status_code == 429 or is_upstream_rate_limited(r)
+            if limited and retries < self.max_429_retries:
                 retries += 1
-                time.sleep(min(60, 5 * 2 ** (retries - 1)))
+                self.slow_down()
+                time.sleep(retry_wait(r, retries))
                 continue
             try:
                 payload = r.json()
@@ -233,7 +264,8 @@ class Runner:
         for spec in turns_spec:
             turn = self.post(spec["message"], conversation_id, spec.get("document_id"))
             result.turns.append(turn)
-            if turn.http_status is None or turn.http_status == 429:
+            if turn.http_status is None or turn.http_status == 429 or (
+                    turn.http_status == 503 and (turn.error or {}).get("error") == UPSTREAM_RATE_LIMITED):
                 result.excluded = "network_error" if turn.http_status is None else "rate_limited"
                 break
             check_turn(turn, effective_expect(spec, self.m2), self.m2)
@@ -490,7 +522,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--base-url", required=True)
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--only", help="comma-separated question IDs")
-    ap.add_argument("--delay", type=float, default=3.5, help="seconds between requests (rate limit is 20/min)")
+    ap.add_argument("--delay", type=float, default=None,
+                    help="seconds between requests (default: 3.5 in m1 mode, 10 in m2 mode; slows down by itself "
+                         "after a rate limit)")
     ap.add_argument("--questions", type=Path, default=ROOT / "questions.yaml")
     ap.add_argument("--mode", choices=["auto", "m1", "m2"], default="auto",
                     help="m1: ungrounded checks; m2: grounded checks; auto: ask /api/health")
@@ -506,7 +540,7 @@ def main(argv: list[str] | None = None) -> int:
     by_id = {q["id"]: q for q in questions}
 
     started = datetime.now(UTC)
-    runner = Runner(args.base_url, args.delay, m2=mode == "m2")
+    runner = Runner(args.base_url, args.delay if args.delay is not None else DEFAULT_DELAY[mode], m2=mode == "m2")
     print(f"Mode: {mode}", flush=True)
     results: list[CaseResult] = []
     complete = True
