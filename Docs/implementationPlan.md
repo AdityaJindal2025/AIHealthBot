@@ -449,7 +449,7 @@ Deploy **in this order**. Each step needs a value from the one before it: databa
 **3. Vercel: frontend**
 - [ ] Check the project settings from Phase 1:
   - **Root Directory:** `frontend`. Framework preset **Next.js**, with the default build (`next build`) and install commands.
-  - **Node.js version:** the same major version as CI (`node-version` in `.github/workflows/ci.yml`, currently 20). If Vercel no longer offers it, choose the next LTS on Vercel and change `ci.yml` to match in the same PR.
+  - **Node.js version:** the same major version as CI (`node-version` in `.github/workflows/ci.yml`, currently **22**; vitest 5 needs Node 22.12 or newer). If Vercel no longer offers it, choose the next LTS on Vercel and change `ci.yml` to match in the same PR.
   - **Skip deployments when there are no changes to the root directory:** on, so backend-only commits don't rebuild the site.
   - **Production branch:** `main`.
 - [ ] **Environment Variables:** `NEXT_PUBLIC_API_BASE_URL=https://<backend>.up.railway.app` for **Production**. It is inlined at build time, so **redeploy** after every change (EC OPS-05). No other variables: the theme list comes from the backend (`GET /api/themes`), so it needs no frontend change when `themes.json` changes.

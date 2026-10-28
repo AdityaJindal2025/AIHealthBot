@@ -84,7 +84,7 @@ The API envelope gained optional fields: `grounding` (status, filter, searched d
 
 ## Local setup
 
-Requirements: Python 3.12+, Node 20+, a Groq API key.
+Requirements: Python 3.12+, Node 22.12+, a Groq API key.
 
 ### Backend
 
