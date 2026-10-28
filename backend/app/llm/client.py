@@ -151,8 +151,9 @@ def _complete(messages: list[dict], schema_name: str, schema: dict, max_tokens: 
             },
         )
     except groq.RateLimitError as e:
-        # The SDK has already retried (max_retries); the provider is still refusing.
-        raise ModelFailure("rate_limited", f"status={e.status_code}", model=model_id, latency_ms=elapsed(),
+        # The SDK has already retried (max_retries); the provider is still refusing. The message names the
+        # limit that was hit (per-minute or per-day tokens), which the response headers do not.
+        raise ModelFailure("rate_limited", f"status={e.status_code} {e.message}", model=model_id, latency_ms=elapsed(),
                            retry_after=_retry_after(e)) from e
     except groq.APIStatusError as e:
         raise ModelFailure("api_error", f"status={e.status_code} {e.message}", model=model_id,

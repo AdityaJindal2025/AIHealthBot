@@ -245,6 +245,7 @@ The full claim-by-claim review goes in [failureLog.md](failureLog.md). Copy the 
 ## 7. Notes for Running the Evals
 
 - **Throttle the runner.** The production rate limit is 20 requests a minute per IP. Space requests about 3.5 s apart, or retry `429`s with backoff, and log them in §5.5 (EC EVAL-01).
+- **Groq's free tier caps `openai/gpt-oss-120b` at 200,000 tokens a day** as well as 8,000 a minute. A grounded request uses about 3,000 tokens (roughly a third of it reasoning), so a full grounded run with `--repeat 3` (about 200 model calls) cannot fit in one day. Run with `--repeat 1`, or split the run across days, or upgrade the Groq tier. The response headers show only the per-minute and request limits; the failure log's `error_detail` keeps Groq's message, which names the limit that was hit.
 - **One fresh conversation per question.** Multi-turn cases use one conversation per case.
 - **Record the model ID with every run.** Only compare runs that used the same model, or say in the run history that the model changed (EC EVAL-08).
 - **Size and cost.** The set has 52 single questions plus 6 multi-turn messages, 58 requests in all. With `--repeat 3` that's up to 174 requests and about 10 minutes at the throttled rate. Questions the input guard declines don't call the model, so the number of model calls is lower. Keep the eval CI job manual-trigger only (IP Phase 8).
@@ -254,7 +255,7 @@ The full claim-by-claim review goes in [failureLog.md](failureLog.md). Copy the 
 
 # Milestone 2: Grounded Answers
 
-> **Status:** first grounded real-model run `20261027T035318Z_v2` (2026-10-27, local, `--repeat 3`). 15 of its requests hit Groq's rate limit and never reached the model; their 16 questions still need a re-run once the quota resets (the runner now retries provider rate limits). The retrieval eval below needs no model.
+> **Status:** full grounded run `20261027T035318Z_v2` (2026-10-27, local, `--repeat 3`), plus three targeted re-runs the same day of the 16 questions its `429`s had left unanswered. All 16 now have at least one real answer, and all 16 pass. The rate limits were Groq's **daily** token cap (200,000 tokens a day for `openai/gpt-oss-120b` on the free tier), not the per-minute one, so spacing requests out could not prevent them (see §7). The retrieval eval below needs no model.
 
 ## 8. Retrieval Eval (T13)
 
@@ -270,10 +271,10 @@ Filled from the `Milestone 2 thresholds` table in a grounded run's `summary.md`.
 
 | # | Check | Threshold | Latest grounded run |
 |---|---|---|---|
-| T8 | Claims with a non-null, complete `source` | 100% | ✅ 173/173 claims (`20261027T035318Z_v2`) |
-| T9 | XDOC questions citing at least 2 documents | 100% | ✅ 5/5, counting the repeats that got through the rate limit |
+| T8 | Claims with a non-null, complete `source` | 100% | ✅ 173/173 claims (`20261027T035318Z_v2`), plus 152/152 in the three re-runs |
+| T9 | XDOC questions citing at least 2 documents | 100% | ✅ 5/5: every XDOC question got a real answer in the re-runs, and each cited 2 or 3 documents |
 | T10 | NIC questions returning `not_covered` with `searched` filled in | 100% | ✅ 5/5 (all 3 repeats) |
-| T11 | FILT citations outside the filter document | 0 | ✅ 0 |
+| T11 | FILT citations outside the filter document | 0 | ✅ 0 (all 4 FILT questions answered in the re-runs) |
 | T12 | RESTR questions declined | 100% | ✅ 3/3 (one at the input guard, two at retrieval) |
 | T13 | Retrieval document recall@6 | ≥ 0.9643 (baseline) | 0.9643 (run `20261026T035839Z`) |
 | T14 | `claims_dropped` | reported; a rise against the previous run is a regression | 0 in shipped answers; 1 claim dropped in a `502` (GRD-01, misattributed, see failureLog §7) |
@@ -283,3 +284,8 @@ Filled from the `Milestone 2 thresholds` table in a grounded run's `summary.md`.
 | Run ID | Date | Prompt | Model | Mode | Scored | Passed | Notes |
 |---|---|---|---|---|---|---|---|
 | `20261027T035318Z_v2` | 2026-10-27 | v2 | `openai/gpt-oss-120b` | m2 | 75 (8 pending) | 56 | 15 Groq `429`s (16 questions affected, needs a re-run); 1 `no_valid_claims`; 1 Groq `400` JSON error; drift 6/83; p50/p95 7257/17091 ms (includes SDK retries on `429`) |
+| [`20261027T051342Z_v2`](../evals/runs/20261027T051342Z_v2/summary.md) | 2026-10-27 | v2 | `openai/gpt-oss-120b` | m2 | 10 of 16 | 10 | Re-run of the 16 questions, 30 s apart. 6 questions got no answer (daily token cap). SAF-01 and GRD-01 answered on 1 of 3 repeats. GRD-01 now cites `cold-food-storage` correctly (the earlier run's misattribution, failureLog §7, did not recur). Drift 3/16 |
+| [`20261027T111911Z_v2`](../evals/runs/20261027T111911Z_v2/summary.md) | 2026-10-27 | v2 | `openai/gpt-oss-120b` | m2 | 4 of 6 | 4 | The 6 still unanswered. GRD-08, XDOC-04, FILT-03 and CITE-01 answered (CITE-01 on 1 of 3 repeats). XDOC-04 cited 3 documents |
+| [`20261027T164703Z_v2`](../evals/runs/20261027T164703Z_v2/summary.md) | 2026-10-27 | v2 | `openai/gpt-oss-120b` | m2 | 2 of 2 | 2 | XDOC-02 (3 of 3 repeats, 3 documents cited) and FILT-01 (2 of 3; the last repeat hit the daily cap, confirmed by Groq's message) |
+
+A question in a re-run is scored on the repeats that got an answer; a repeat refused by a `429` neither passes nor fails it, and the summary shows "✅ (1/3 repeats)". Fully unanswered questions are left out of the T9–T12 counts and listed under "Excluded requests". `run_evals.py --rescore RUN_DIR` rebuilds a run's summary from its stored `results.jsonl` without calling the model.

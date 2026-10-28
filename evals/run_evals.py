@@ -86,6 +86,20 @@ class CaseResult:
         return d
 
 
+def load_results(path: Path) -> list[CaseResult]:
+    """Read a run's results.jsonl back (for --rescore). Derived `passed` keys are recomputed, not stored."""
+    results = []
+    for line in path.read_text().splitlines():
+        d = json.loads(line)
+        d.pop("passed", None)
+        turns = []
+        for td in d.pop("turns"):
+            td.pop("passed", None)
+            turns.append(TurnResult(**td))
+        results.append(CaseResult(**d, turns=turns))
+    return results
+
+
 def word_count(text: str) -> int:
     return len(text.split())
 
@@ -313,16 +327,21 @@ def status_of(r: CaseResult) -> str:
 
 
 def summarise_case(rs: list[CaseResult]) -> dict:
-    """Collapse repeats: a question passes only if every repeat passed."""
+    """Collapse repeats: a question passes only if every answered repeat passed. A repeat excluded by a
+    429 or network error has no model result, so it neither passes nor fails the question (EC EVAL-01);
+    `answered_repeats` keeps the gap visible."""
     first = rs[0]
+    answered = [r for r in rs if not r.excluded]
     last_env = next((r.turns[-1].envelope for r in rs if r.turns and r.turns[-1].envelope), None)
     return {
         "id": first.id,
         "group": first.group,
         "pending_decision": first.pending_decision,
-        "passed": all(r.passed for r in rs),
-        "excluded": all(r.excluded for r in rs),
-        "status": status_of(first),
+        "passed": bool(answered) and all(r.passed for r in answered),
+        "excluded": not answered,
+        "answered_repeats": len(answered),
+        "repeats": len(rs),
+        "status": status_of(answered[0] if answered else first),
         "claims": len(last_env["claims"]) if last_env else None,
         "words": word_count(last_env["answer"]) if last_env else None,
         "answer": last_env["answer"] if last_env else None,
@@ -363,7 +382,8 @@ def milestone2_section(cases: list[dict], turns: list[TurnResult], meta: dict,
                 for e in envs for i in range(len(e.get("claims", [])))]
     by_group = defaultdict(list)
     for c in cases:
-        by_group[c["group"]].append(c)
+        if not c["excluded"]:  # no answer to score; listed under "Excluded requests"
+            by_group[c["group"]].append(c)
     xdoc = [len(c["cited_documents"]) >= 2 for c in by_group["cross_document"]]
     nic = [c["grounding"] == "not_covered" and "searched_count" not in c["failed_checks"]
            for c in by_group["not_in_corpus"]]
@@ -449,6 +469,8 @@ def write_report(run_dir: Path, results: list[CaseResult], questions: dict[str, 
     for c in cases:
         result = "⏸ pending" if c["pending_decision"] else ("⚠️ excluded" if c["excluded"] else
                                                              ("✅" if c["passed"] else "❌"))
+        if not c["pending_decision"] and not c["excluded"] and c.get("answered_repeats", 1) < c.get("repeats", 1):
+            result += f" ({c['answered_repeats']}/{c['repeats']} repeats)"
         lines.append(f"| {c['id']} | {c['group']} | {result} | {c['status']} | {c['words'] or '—'} | "
                      f"{c['claims'] if c['claims'] is not None else '—'} | {', '.join(c['failed_checks']) or '—'} |")
 
@@ -519,7 +541,8 @@ def write_report(run_dir: Path, results: list[CaseResult], questions: dict[str, 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--base-url", required=True)
+    target = ap.add_mutually_exclusive_group(required=True)
+    target.add_argument("--base-url")
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--only", help="comma-separated question IDs")
     ap.add_argument("--delay", type=float, default=None,
@@ -528,7 +551,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--questions", type=Path, default=ROOT / "questions.yaml")
     ap.add_argument("--mode", choices=["auto", "m1", "m2"], default="auto",
                     help="m1: ungrounded checks; m2: grounded checks; auto: ask /api/health")
+    target.add_argument("--rescore", type=Path, metavar="RUN_DIR",
+                    help="rewrite RUN_DIR's summary from its stored results.jsonl (no requests are sent)")
     args = ap.parse_args(argv)
+    if args.rescore:
+        data = yaml.safe_load(args.questions.read_text())
+        meta = json.loads((args.rescore / "meta.json").read_text())
+        code = write_report(args.rescore, load_results(args.rescore / "results.jsonl"),
+                            {q["id"]: q for q in data["questions"]}, meta)
+        print(f"Rewrote {args.rescore}/summary.md")
+        return code
     mode = detect_mode(args.base_url) if args.mode == "auto" else args.mode
 
     data = yaml.safe_load(args.questions.read_text())

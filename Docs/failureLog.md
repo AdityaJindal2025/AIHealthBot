@@ -107,6 +107,8 @@ SELECT reason, count(*), min(claim_text) AS example FROM citation_events GROUP B
 |---|---|---|---|
 | `unsupported_number` | 1 (run `20261027T035318Z_v2`, GRD-01) | "Egg salad can be stored in the refrigerator for 3 to 4 days." cited **S5 = `fsa-chill`**, which doesn't contain "3 to 4" | No. The fact is right, but it came from the Cold Food Storage Chart, not the cited FSA chunk: a **misattributed** claim, caught in code. It was the only claim, so the request ended in a `no_valid_claims` `502` (failure `d0a1eadd-…`) |
 
+In the re-run `20261027T051342Z_v2`, GRD-01 cited the same fact to `cold-food-storage` correctly, and no claim was dropped in any of the three re-runs (T14 = 0).
+
 ## 8. Retrieval
 
 Not-covered answers that should have been answered (floor too high), and restricted chunks withheld from the model.

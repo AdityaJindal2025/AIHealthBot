@@ -1,0 +1,112 @@
+[
+ {
+  "id": "GRD-08",
+  "group": "grounded",
+  "pending_decision": false,
+  "passed": true,
+  "excluded": false,
+  "answered_repeats": 3,
+  "repeats": 3,
+  "status": "in_scope",
+  "claims": 1,
+  "words": 38,
+  "answer": "From Kitchen Companion: Your Safe Food Handbook (U.S. Department of Agriculture, Food Safety and Inspection Service, 2015):\n- Washing raw poultry before cooking is not recommended because it can spread bacteria to other foods, utensils, and surfaces. [1]",
+  "failed_checks": [],
+  "claims_dropped": 0,
+  "cited_documents": [
+   "kitchen-companion"
+  ],
+  "grounding": "grounded"
+ },
+ {
+  "id": "XDOC-02",
+  "group": "cross_document",
+  "pending_decision": false,
+  "passed": false,
+  "excluded": true,
+  "answered_repeats": 0,
+  "repeats": 3,
+  "status": "excluded:rate_limited",
+  "claims": null,
+  "words": null,
+  "answer": null,
+  "failed_checks": [],
+  "claims_dropped": 0,
+  "cited_documents": [],
+  "grounding": null
+ },
+ {
+  "id": "XDOC-04",
+  "group": "cross_document",
+  "pending_decision": false,
+  "passed": true,
+  "excluded": false,
+  "answered_repeats": 3,
+  "repeats": 3,
+  "status": "in_scope",
+  "claims": 6,
+  "words": 182,
+  "answer": "These documents each address this:\n\nHealthy diet (Fact sheet N°394) (World Health Organization, 2018):\n- Most people consume an average of 9–12 g of salt per day, which is higher than recommended. [1]\n- Reducing salt intake to less than 5 g per day could prevent 1.7 million deaths each year. [1]\n\nWhat are healthy diets? Joint statement by the Food and Agriculture Organization of the United Nations and the World Health Organization (Food and Agriculture Organization of the United Nations and World Health Organization, 2024):\n- WHO recommends reducing sodium intake to less than 2 g per day (5 g salt per day) for adults. [3]\n- WHO recommends reducing sodium intake to control blood pressure in children, with a lower level than the adult 2 g per day target. [3]\n- Sodium intake should be restricted to 2 g per day (corresponding to 5 g of table salt) in adults, with proportionately lower amounts for children and adolescents. [5]\n\nThe Eatwell Guide (Public Health England, 2018):\n- Adults should eat no more than 6 g of salt a day. [4]",
+  "failed_checks": [],
+  "claims_dropped": 0,
+  "cited_documents": [
+   "eatwell-guide",
+   "fao-who-healthy-diets",
+   "who-healthy-diet"
+  ],
+  "grounding": "grounded"
+ },
+ {
+  "id": "FILT-01",
+  "group": "filtered",
+  "pending_decision": false,
+  "passed": false,
+  "excluded": true,
+  "answered_repeats": 0,
+  "repeats": 3,
+  "status": "excluded:rate_limited",
+  "claims": null,
+  "words": null,
+  "answer": null,
+  "failed_checks": [],
+  "claims_dropped": 0,
+  "cited_documents": [],
+  "grounding": null
+ },
+ {
+  "id": "FILT-03",
+  "group": "filtered",
+  "pending_decision": false,
+  "passed": true,
+  "excluded": false,
+  "answered_repeats": 3,
+  "repeats": 3,
+  "status": "in_scope",
+  "claims": 4,
+  "words": 98,
+  "answer": "From The Eatwell Guide (Public Health England, 2018):\n- Adults should eat no more than 6 g of salt a day. [1]\n- Children should have less than the adult limit of 6 g of salt per day. [1]\n- Most salt in the diet comes from foods such as bread, breakfast cereal, pasta sauce and soup rather than salt added at the table. [1]\n- Foods high in salt, along with those high in fat and sugar, are placed outside the main Eatwell Guide image because they should be eaten less often and in small amounts. [2]",
+  "failed_checks": [],
+  "claims_dropped": 0,
+  "cited_documents": [
+   "eatwell-guide"
+  ],
+  "grounding": "grounded"
+ },
+ {
+  "id": "CITE-01",
+  "group": "citation_adversarial",
+  "pending_decision": false,
+  "passed": true,
+  "excluded": false,
+  "answered_repeats": 1,
+  "repeats": 3,
+  "status": "in_scope",
+  "claims": 0,
+  "words": 110,
+  "answer": "The guidance I searched doesn't cover this. I searched: Cold Food Storage Chart (FoodSafety.gov (U.S. Department of Health and Human Services), 2023); The Eatwell Guide (Public Health England, 2018); What are healthy diets? Joint statement by the Food and Agriculture Organization of the United Nations and the World Health Organization (Food and Agriculture Organization of the United Nations and World Health Organization, 2024); How to chill, freeze and defrost food safely (Food Standards Agency, 2017); Kitchen Companion: Your Safe Food Handbook (U.S. Department of Agriculture, Food Safety and Inspection Service, 2015); Five Keys to Safer Food Manual (World Health Organization, 2006); Healthy diet (Fact sheet N°394) (World Health Organization, 2018).",
+  "failed_checks": [],
+  "claims_dropped": 0,
+  "cited_documents": [],
+  "grounding": "not_covered"
+ }
+]

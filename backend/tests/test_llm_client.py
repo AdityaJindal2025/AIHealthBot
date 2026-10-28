@@ -111,10 +111,11 @@ def _req():
 
 def test_rate_limit_is_its_own_failure_type_with_retry_after(sdk):
     response = httpx.Response(429, request=_req(), headers={"retry-after": "17"})
-    sdk.side_effect = groq.RateLimitError("rate", response=response, body=None)
+    sdk.side_effect = groq.RateLimitError("Rate limit reached on tokens per day (TPD)", response=response, body=None)
     with pytest.raises(ModelFailure) as e:
         llm.generate([], "q")
     assert (e.value.type, e.value.retry_after) == ("rate_limited", 17)
+    assert "tokens per day (TPD)" in e.value.detail  # which limit was hit is kept for the failure log
 
 
 def test_rate_limit_without_retry_after_header(sdk):
