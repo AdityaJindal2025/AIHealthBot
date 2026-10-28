@@ -14,7 +14,7 @@ GOOD = AssistantOutput(answer="Lentils are high in fibre and protein.",
 
 
 def result(output=GOOD):
-    return llm.GenerationResult(output=output, model="claude-opus-5", latency_ms=1234, input_tokens=100,
+    return llm.GenerationResult(output=output, model="openai/gpt-oss-120b", latency_ms=1234, input_tokens=100,
                                 output_tokens=50)
 
 
@@ -54,11 +54,11 @@ def test_in_scope(client, db, generate):
     assert r.status_code == 200
     body = r.json()
     assert body["scope"] == {"status": "in_scope", "category": None, "stage": None}
-    assert body["meta"] == {"prompt_version": "v1", "model": "claude-opus-5", "latency_ms": 1234}
+    assert body["meta"] == {"prompt_version": "v1", "model": "openai/gpt-oss-120b", "latency_ms": 1234}
     assert all(c["source"] is None for c in body["claims"])
     assert count(db, Message) == 2
     stored = db.scalars(select(Message).where(Message.role == "assistant")).one()
-    assert (stored.prompt_version, stored.model, stored.input_tokens) == ("v1", "claude-opus-5", 100)
+    assert (stored.prompt_version, stored.model, stored.input_tokens) == ("v1", "openai/gpt-oss-120b", 100)
 
 
 def test_input_guard_decline_does_not_call_model(client, db, generate):
@@ -216,11 +216,28 @@ def test_rate_limit_uses_rightmost_forwarded_ip(monkeypatch):
 
 
 def test_api_key_never_logged(client, generate, caplog):
-    generate.state["next"] = ModelFailure("api_error", "status=401 invalid x-api-key sk-ant-test-not-a-real-key")
+    generate.state["next"] = ModelFailure("api_error", "status=401 Invalid API Key gsk_test-not-a-real-key")
     with caplog.at_level(logging.INFO):
         post(client, "Is fish healthy?")
     from app.logging_config import RedactingJsonFormatter
 
     fmt = RedactingJsonFormatter("%(message)s")
     rendered = "\n".join(fmt.format(r) for r in caplog.records)
-    assert "sk-ant-test-not-a-real-key" not in rendered
+    assert "gsk_test-not-a-real-key" not in rendered
+
+
+def test_provider_rate_limit_is_503_with_retry_after(client, db, generate):
+    generate.state["next"] = ModelFailure("rate_limited", "status=429", retry_after=12)
+    r = post(client, "Are lentils healthy?")
+    assert r.status_code == 503
+    assert r.headers["retry-after"] == "12"
+    body = r.json()
+    assert body["error"] == "upstream_rate_limited" and body["detail"] == "rate_limited"
+    failure = db.scalars(select(Failure)).one()  # still recorded, never hidden (Rule 6)
+    assert failure.type == "rate_limited" and str(failure.id) == body["failure_id"]
+
+
+def test_provider_rate_limit_without_header_gets_default_retry_after(client, generate):
+    generate.state["next"] = ModelFailure("rate_limited", "status=429")
+    r = post(client, "Are lentils healthy?")
+    assert r.status_code == 503 and r.headers["retry-after"] == "30"

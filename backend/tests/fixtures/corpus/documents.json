@@ -1,0 +1,84 @@
+[
+  {
+    "document_id": "alpha-safety",
+    "title": "Alpha Food Safety Guide",
+    "publisher": "Alpha Food Agency",
+    "publisher_short": "AFA",
+    "year": 2020,
+    "url": "https://example.org/alpha-safety",
+    "aliases": [
+      "alpha guide"
+    ],
+    "publisher_aliases": [
+      "alpha food agency",
+      "afa"
+    ],
+    "verified_by": "Test Fixture",
+    "verified_on": "2026-10-26"
+  },
+  {
+    "document_id": "beta-diet",
+    "title": "Beta Healthy Eating Guide",
+    "publisher": "Beta Health Service",
+    "publisher_short": "BHS",
+    "year": 2020,
+    "url": "https://example.org/beta-diet",
+    "aliases": [
+      "beta guide"
+    ],
+    "publisher_aliases": [
+      "beta health service",
+      "bhs"
+    ],
+    "verified_by": "Test Fixture",
+    "verified_on": "2026-10-26"
+  },
+  {
+    "document_id": "delta-chill",
+    "title": "Delta Chilling Advice",
+    "publisher": "Delta Standards Agency",
+    "publisher_short": "DSA",
+    "year": 2020,
+    "url": "https://example.org/delta-chill",
+    "aliases": [
+      "delta advice"
+    ],
+    "publisher_aliases": [
+      "delta standards agency"
+    ],
+    "verified_by": "Test Fixture",
+    "verified_on": "2026-10-26"
+  },
+  {
+    "document_id": "epsilon-fats",
+    "title": "Epsilon Fats Fact Sheet",
+    "publisher": "Epsilon Institute",
+    "publisher_short": "EI",
+    "year": 2020,
+    "url": "https://example.org/epsilon-fats",
+    "aliases": [
+      "epsilon fact sheet"
+    ],
+    "publisher_aliases": [
+      "epsilon institute"
+    ],
+    "verified_by": "Test Fixture",
+    "verified_on": "2026-10-26"
+  },
+  {
+    "document_id": "gamma-salt",
+    "title": "Gamma Salt Guidance",
+    "publisher": "Gamma Organization",
+    "publisher_short": "GO",
+    "year": 2020,
+    "url": "https://example.org/gamma-salt",
+    "aliases": [
+      "gamma guidance"
+    ],
+    "publisher_aliases": [
+      "gamma organization"
+    ],
+    "verified_by": "Test Fixture",
+    "verified_on": "2026-10-26"
+  }
+]

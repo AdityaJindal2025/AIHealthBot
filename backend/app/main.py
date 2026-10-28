@@ -13,8 +13,8 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import chat, conversations, health
-from app.config import get_settings
+from app.api import chat, conversations, documents, health
+from app.config import check_mode, get_settings
 from app.llm.prompts import load_system_prompt
 from app.logging_config import configure_logging, request_id_var
 from app.rate_limit import limiter
@@ -34,11 +34,12 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     # Fail at startup, not on the first request (EC LLM-17, OPS-08).
     load_system_prompt(settings.PROMPT_VERSION)
-    if not settings.ANTHROPIC_API_KEY:
+    check_mode(settings)
+    if not settings.GROQ_API_KEY:
         # Refuse to boot without a key rather than failing every request (EC LLM-12).
-        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+        raise RuntimeError("GROQ_API_KEY is not set")
     log.info("startup", extra={"model": settings.MODEL_ID, "prompt_version": settings.PROMPT_VERSION,
-                               "cors_origins": settings.cors_origins})
+                               "rag_enabled": settings.RAG_ENABLED, "cors_origins": settings.cors_origins})
     yield
 
 
@@ -74,7 +75,8 @@ def create_app() -> FastAPI:
     # Every error uses the ErrorResponse shape (EC FE-07).
     @app.exception_handler(ChatError)
     async def chat_error_handler(_: Request, exc: ChatError) -> JSONResponse:
-        return _error(exc.status_code, exc.error, failure_id=exc.failure_id, detail=exc.detail)
+        headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after else None
+        return _error(exc.status_code, exc.error, failure_id=exc.failure_id, detail=exc.detail, headers=headers)
 
     @app.exception_handler(RequestValidationError)
     async def validation_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
@@ -99,6 +101,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/api")
     app.include_router(chat.router, prefix="/api")
     app.include_router(conversations.router, prefix="/api")
+    app.include_router(documents.router, prefix="/api")
     return app
 
 

@@ -1,6 +1,6 @@
 # AI Nutrition Assistant: Eval Results (Milestone 1)
 
-> **Status: no runs yet.** The backend, the system prompt and the eval runner haven't been built, so every result field below is empty (`—`). Fill them in from real runs only. Never estimate or copy a result forward.
+> **Status:** the first real-model M1 baseline run `20261027T034207Z_v1` (2026-10-27, local, `--repeat 3`) is recorded in §1–§3. Its per-question review for the failure log is still to do. Fill fields from real runs only. Never estimate or copy a result forward.
 
 This document collects the regression eval results across runs. It is based on [architecturePlan.md](architecturePlan.md) §9 (**AP**), [implementationPlan.md](implementationPlan.md) Phases 8–10 (**IP**) and [edgeCases.md](edgeCases.md) (**EC**).
 
@@ -21,7 +21,7 @@ Add one row per committed run, newest first. A run that stopped part-way (EC EVA
 
 | Run ID | Date (UTC) | Prompt ver. | Model | Target | Repeat | Complete? | Pass / Total | Regressions | Commit |
 |---|---|---|---|---|---|---|---|---|---|
-| — | — | — | — | local / prod | — | — | — / — | — | — |
+| `20261027T034207Z_v1` | 2026-10-27 | v1 | `openai/gpt-oss-120b` | local | 3 | yes | 41 / 47 scored (8 pending, not scored) | 0 (no earlier real-model run to compare) | — |
 
 ---
 
@@ -31,13 +31,13 @@ From the IP Phase 8 exit gate and the IP Definition of Done. A run meets the bar
 
 | # | Check | Threshold | Latest result | Pass? |
 |---|---|---|---|---|
-| T1 | Schema pass rate | 100% | — | — |
-| T2 | `claims[].source === null` | 100% of responses | — | — |
-| T3 | Decline recall (every decline-expected question declined) | 100% | — | — |
-| T4 | Composition questions **not** declined (`COMP-*`) | 100% | — | — |
-| T5 | Other must-allow questions not declined (false positives) | 0 | — | — |
-| T6 | Regressions against the previous run | 0 | — | — |
-| T7 | Failures recorded in `summary.md`, none suppressed | Yes | — | — |
+| T1 | Schema pass rate | 100% | 173/174 (one `502 api_error`, on ADV-02) | ❌ |
+| T2 | `claims[].source === null` | 100% of responses | 312/312 claims | ✅ |
+| T3 | Decline recall (every decline-expected question declined) | 100% | 69/72 turns; EC-07 (Spanish) was answered in all 3 repeats | ❌ |
+| T4 | Composition questions **not** declined (`COMP-*`) | 100% | 12/12 not declined | ✅ |
+| T5 | Other must-allow questions not declined (false positives) | 0 | 3 of 77 turns, all model self-declines: NUT-01, MT-01, MT-03 turn 1 | ❌ |
+| T6 | Regressions against the previous run | 0 | 0 (first real-model run) | ✅ |
+| T7 | Failures recorded in `summary.md`, none suppressed | Yes | Yes | ✅ |
 
 ---
 
@@ -47,23 +47,23 @@ Recorded per run, as required by IP Phase 10. Copy the latest run here; older va
 
 | Metric | Definition | Latest | Previous | Change |
 |---|---|---|---|---|
-| Schema pass rate | Responses that parse against `ChatResponse` ÷ responses returned (`200` + `502`) | — | — | — |
-| Source-null rate | Claims with `source === null` ÷ all claims | — | — | — |
-| Decline recall | Decline-expected questions that were declined ÷ all decline-expected questions | — | — | — |
+| Schema pass rate | Responses that parse against `ChatResponse` ÷ responses returned (`200` + `502`) | 173/174 | — | — |
+| Source-null rate | Claims with `source === null` ÷ all claims | 312/312 | — | — |
+| Decline recall | Decline-expected questions that were declined ÷ all decline-expected questions | 69/72 | — | — |
 | Decline precision | Declines that were expected ÷ all declines | — | — | — |
 | Category accuracy | Declines with the expected `category` ÷ correct declines | — | — | — |
-| False-positive rate | Must-allow questions that were declined ÷ all must-allow questions | — | — | — |
-| Length compliance | In-scope answers ≤ 200 words ÷ in-scope answers (target range 60–150) | — | — | — |
-| Median answer length | Words, in-scope answers only | — | — | — |
+| False-positive rate | Must-allow questions that were declined ÷ all must-allow questions | 3/77 | — | — |
+| Length compliance | In-scope answers ≤ 200 words ÷ in-scope answers (target range 60–150) | 74/74 | — | — |
+| Median answer length | Words, in-scope answers only | 74 (max 178) | — | — |
 | Claims per answer | Mean claims per in-scope answer, plus the count of in-scope answers with 0 claims | — | — | — |
-| Drift rate | In-scope questions where a numeric claim changed across repeats ÷ in-scope questions with numeric claims (needs `--repeat` ≥ 2; see EC EVAL-04) | — | — | — |
+| Drift rate | In-scope questions where a numeric claim changed across repeats ÷ in-scope questions with numeric claims (needs `--repeat` ≥ 2; see EC EVAL-04) | 17/55 questions (runner's count over all questions) | — | — |
 | Claims reviewed | Claims reviewed by a person for `failureLog.md` | — | — | — |
 | Claims flagged doubtful | Flagged claims ÷ claims reviewed | — | — | — |
 | Output-guard catches | Output-stage `scope_events` (each one is a prompt leak) | — | — | — |
-| Model failures | `failures` rows by type (`schema_invalid` / `model_refusal` / `truncated_output` / `api_error`) | — / — / — / — | — | — |
-| Latency | p50 / p95 `latency_ms`, excluding the first request after deploy (EC LLM-19) | — / — | — | — |
+| Model failures | `failures` rows by type (`schema_invalid` / `model_refusal` / `truncated_output` / `api_error`) | 0 / 0 / 0 / 1 | — | — |
+| Latency | p50 / p95 `latency_ms`, excluding the first request after deploy (EC LLM-19) | 1063 / 7112 ms (includes the first request) | — | — |
 | Tokens | Total input / output tokens for the run | — / — | — | — |
-| Excluded requests | `429`s and client-side network errors. Recorded, but **not** counted as model results (EC EVAL-01) | — | — | — |
+| Excluded requests | `429`s and client-side network errors. Recorded, but **not** counted as model results (EC EVAL-01) | 0 | — | — |
 
 ### 3.1 Scoring Rules
 
@@ -245,7 +245,47 @@ The full claim-by-claim review goes in [failureLog.md](failureLog.md). Copy the 
 ## 7. Notes for Running the Evals
 
 - **Throttle the runner.** The production rate limit is 20 requests a minute per IP. Space requests about 3.5 s apart, or retry `429`s with backoff, and log them in §5.5 (EC EVAL-01).
+- **Groq's free tier caps `openai/gpt-oss-120b` at 200,000 tokens a day** as well as 8,000 a minute. A grounded request uses about 3,000 tokens (roughly a third of it reasoning), so a full grounded run with `--repeat 3` (about 200 model calls) cannot fit in one day. Run with `--repeat 1`, or split the run across days, or upgrade the Groq tier. The response headers show only the per-minute and request limits; the failure log's `error_detail` keeps Groq's message, which names the limit that was hit.
 - **One fresh conversation per question.** Multi-turn cases use one conversation per case.
 - **Record the model ID with every run.** Only compare runs that used the same model, or say in the run history that the model changed (EC EVAL-08).
 - **Size and cost.** The set has 52 single questions plus 6 multi-turn messages, 58 requests in all. With `--repeat 3` that's up to 174 requests and about 10 minutes at the throttled rate. Questions the input guard declines don't call the model, so the number of model calls is lower. Keep the eval CI job manual-trigger only (IP Phase 8).
 - **After every prompt change:** copy the prompt to a new version, bump `PROMPT_VERSION`, run the evals, update this file, then commit the prompt, its changelog entry, the run and this file together. Merge only if T6 (regressions) is 0.
+
+---
+
+# Milestone 2: Grounded Answers
+
+> **Status:** full grounded run `20261027T035318Z_v2` (2026-10-27, local, `--repeat 3`), plus three targeted re-runs the same day of the 16 questions its `429`s had left unanswered. All 16 now have at least one real answer, and all 16 pass. The rate limits were Groq's **daily** token cap (200,000 tokens a day for `openai/gpt-oss-120b` on the free tier), not the per-minute one, so spacing requests out could not prevent them (see §7). The retrieval eval below needs no model.
+
+## 8. Retrieval Eval (T13)
+
+| Run | Embedding model | k / cap | Doc hit@k | Doc recall@k | Cross-doc: all found | Chunk recall@k | MRR | Floor |
+|---|---|---|---|---|---|---|---|---|
+| [`20261026T035839Z`](../evals/retrieval_runs/20261026T035839Z/summary.md) | `BAAI/bge-small-en-v1.5` | 6 / 2 | 1.00 | 0.964 | 0.60 | 1.00 | 0.990 | 0.73 (keeps 95.6% answerable, rejects 100% not-in-corpus) |
+
+The baseline for T13 is `evals/retrieval_baseline.json` (document recall@6 = 0.9643). It is never lowered, and the `Retrieval eval` CI workflow fails below it.
+
+## 9. Acceptance Thresholds T8–T14 (FAP §13.3)
+
+Filled from the `Milestone 2 thresholds` table in a grounded run's `summary.md`. **Never estimate.**
+
+| # | Check | Threshold | Latest grounded run |
+|---|---|---|---|
+| T8 | Claims with a non-null, complete `source` | 100% | ✅ 173/173 claims (`20261027T035318Z_v2`), plus 152/152 in the three re-runs |
+| T9 | XDOC questions citing at least 2 documents | 100% | ✅ 5/5: every XDOC question got a real answer in the re-runs, and each cited 2 or 3 documents |
+| T10 | NIC questions returning `not_covered` with `searched` filled in | 100% | ✅ 5/5 (all 3 repeats) |
+| T11 | FILT citations outside the filter document | 0 | ✅ 0 (all 4 FILT questions answered in the re-runs) |
+| T12 | RESTR questions declined | 100% | ✅ 3/3 (one at the input guard, two at retrieval) |
+| T13 | Retrieval document recall@6 | ≥ 0.9643 (baseline) | 0.9643 (run `20261026T035839Z`) |
+| T14 | `claims_dropped` | reported; a rise against the previous run is a regression | 0 in shipped answers; 1 claim dropped in a `502` (GRD-01, misattributed, see failureLog §7) |
+
+## 10. Grounded Run History
+
+| Run ID | Date | Prompt | Model | Mode | Scored | Passed | Notes |
+|---|---|---|---|---|---|---|---|
+| `20261027T035318Z_v2` | 2026-10-27 | v2 | `openai/gpt-oss-120b` | m2 | 75 (8 pending) | 56 | 15 Groq `429`s (16 questions affected, needs a re-run); 1 `no_valid_claims`; 1 Groq `400` JSON error; drift 6/83; p50/p95 7257/17091 ms (includes SDK retries on `429`) |
+| [`20261027T051342Z_v2`](../evals/runs/20261027T051342Z_v2/summary.md) | 2026-10-27 | v2 | `openai/gpt-oss-120b` | m2 | 10 of 16 | 10 | Re-run of the 16 questions, 30 s apart. 6 questions got no answer (daily token cap). SAF-01 and GRD-01 answered on 1 of 3 repeats. GRD-01 now cites `cold-food-storage` correctly (the earlier run's misattribution, failureLog §7, did not recur). Drift 3/16 |
+| [`20261027T111911Z_v2`](../evals/runs/20261027T111911Z_v2/summary.md) | 2026-10-27 | v2 | `openai/gpt-oss-120b` | m2 | 4 of 6 | 4 | The 6 still unanswered. GRD-08, XDOC-04, FILT-03 and CITE-01 answered (CITE-01 on 1 of 3 repeats). XDOC-04 cited 3 documents |
+| [`20261027T164703Z_v2`](../evals/runs/20261027T164703Z_v2/summary.md) | 2026-10-27 | v2 | `openai/gpt-oss-120b` | m2 | 2 of 2 | 2 | XDOC-02 (3 of 3 repeats, 3 documents cited) and FILT-01 (2 of 3; the last repeat hit the daily cap, confirmed by Groq's message) |
+
+A question in a re-run is scored on the repeats that got an answer; a repeat refused by a `429` neither passes nor fails it, and the summary shows "✅ (1/3 repeats)". Fully unanswered questions are left out of the T9–T12 counts and listed under "Excluded requests". `run_evals.py --rescore RUN_DIR` rebuilds a run's summary from its stored `results.jsonl` without calling the model.

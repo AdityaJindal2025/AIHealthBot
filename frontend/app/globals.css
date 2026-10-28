@@ -28,6 +28,11 @@
   --color-notice-border: #fcd34d;
   --color-notice-icon: #fde68a;
   --color-on-notice: #78350f;
+  /* Not covered by the searched guidance: neutral slate, distinct from the amber decline (FPS §4.5). */
+  --color-uncovered: #f1f5f9;
+  --color-uncovered-border: #cbd5e1;
+  --color-uncovered-icon: #e2e8f0;
+  --color-on-uncovered: #334155;
 
   --text-headline-sm: 1.25rem;
   --text-headline-sm--line-height: 1.75rem;

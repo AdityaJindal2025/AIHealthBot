@@ -9,7 +9,7 @@ from pythonjsonlogger.json import JsonFormatter
 
 request_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("request_id", default=None)
 
-_SECRET = re.compile(r"sk-ant-[A-Za-z0-9_\-]+")
+_SECRET = re.compile(r"gsk_[A-Za-z0-9_\-]+")
 
 
 class RequestContextFilter(logging.Filter):
@@ -19,10 +19,10 @@ class RequestContextFilter(logging.Filter):
 
 
 class RedactingJsonFormatter(JsonFormatter):
-    """Last line of defence: scrub anything that looks like an Anthropic key (EC SEC-02)."""
+    """Last line of defence: scrub anything that looks like a Groq key (EC SEC-02)."""
 
     def format(self, record: logging.LogRecord) -> str:
-        return _SECRET.sub("sk-ant-[REDACTED]", super().format(record))
+        return _SECRET.sub("gsk_[REDACTED]", super().format(record))
 
 
 def configure_logging(level: str = "INFO") -> None:

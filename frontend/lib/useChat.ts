@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ApiError, getConversation, sendMessage } from "./api";
-import type { ChatMessage, MessageOut } from "./types";
+import { ApiError, getConversation, getThemes, sendMessage } from "./api";
+import type { ChatMessage, MessageOut, ThemeOut } from "./types";
 
 const STORAGE_KEY = "nutrition-assistant.conversation-id";
+// The "Select theme" filter is remembered per conversation.
+const FILTER_KEY_PREFIX = "nutrition-assistant.theme-filter.";
 
 function readStoredId(): string | null {
   try {
@@ -24,9 +26,37 @@ function writeStoredId(id: string | null) {
   }
 }
 
-function fromServer(m: MessageOut): ChatMessage {
-  return { id: m.id, role: m.role, content: m.content, claims: m.claims ?? [], scope: m.scope };
+function readStoredFilter(conversationId: string): string | null {
+  try {
+    return window.localStorage.getItem(FILTER_KEY_PREFIX + conversationId);
+  } catch {
+    return null;
+  }
 }
+
+function writeStoredFilter(conversationId: string, themeId: string | null) {
+  try {
+    if (themeId) window.localStorage.setItem(FILTER_KEY_PREFIX + conversationId, themeId);
+    else window.localStorage.removeItem(FILTER_KEY_PREFIX + conversationId);
+  } catch {
+    // ignore: the filter still applies for this page view
+  }
+}
+
+function fromServer(m: MessageOut): ChatMessage {
+  return {
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    claims: m.claims ?? [],
+    scope: m.scope,
+    grounding: m.grounding ?? null,
+    sources: m.sources ?? [],
+  };
+}
+
+/** The chunk the user asked to see, from a citation chip. */
+export type FocusedSource = { messageId: string; chunkId: string };
 
 export type ChatErrorState = { error: ApiError; message: string };
 
@@ -37,11 +67,38 @@ export function useChat() {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState<ChatErrorState | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [focused, setFocused] = useState<FocusedSource | null>(null);
+  const [themes, setThemes] = useState<ThemeOut[]>([]);
+  const [themeId, setThemeIdState] = useState<string | null>(null);
 
   // Each "New chat" starts a new epoch; a response from an older epoch is dropped (EC FE-03).
   const epoch = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
   const conversationRef = useRef<string | null>(null);
+  const themeRef = useRef<string | null>(null);
+
+  // The theme list is loaded once. If it fails (or an M1 backend has no endpoint) the filter is hidden.
+  useEffect(() => {
+    const controller = new AbortController();
+    getThemes(controller.signal).then(
+      (res) => setThemes(res.themes),
+      () => {},
+    );
+    return () => controller.abort();
+  }, []);
+
+  const setThemeId = useCallback((id: string | null) => {
+    themeRef.current = id;
+    setThemeIdState(id);
+    if (conversationRef.current) writeStoredFilter(conversationRef.current, id);
+  }, []);
+
+  // A stored filter for a theme that no longer exists is dropped.
+  useEffect(() => {
+    if (themes.length && themeRef.current && !themes.some((t) => t.theme_id === themeRef.current)) {
+      setThemeId(null);
+    }
+  }, [themes, setThemeId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -54,6 +111,9 @@ export function useChat() {
           conversationRef.current = conv.id;
           setConversationId(conv.id);
           setMessages(conv.messages.map(fromServer));
+          const filter = readStoredFilter(conv.id);
+          themeRef.current = filter;
+          setThemeIdState(filter);
         } catch (err) {
           // Unknown ID (DB reset, other environment): start fresh, no error loop (EC FE-01).
           if (err instanceof ApiError && err.status === 404) writeStoredId(null);
@@ -77,19 +137,32 @@ export function useChat() {
       setError(null);
       setSending(true);
       const tempId = `local-${Date.now()}`;
-      setMessages((prev) => [...prev, { id: tempId, role: "user", content: message, claims: [], scope: null }]);
+      setMessages((prev) => [
+        ...prev,
+        { id: tempId, role: "user", content: message, claims: [], scope: null, grounding: null, sources: [] },
+      ]);
 
       try {
-        const res = await sendMessage(conversationRef.current, message, controller.signal);
+        const res = await sendMessage(conversationRef.current, message, themeRef.current, controller.signal);
         if (epoch.current !== myEpoch) return;
         conversationRef.current = res.conversation_id;
         setConversationId(res.conversation_id);
         writeStoredId(res.conversation_id);
+        writeStoredFilter(res.conversation_id, themeRef.current);
         setMessages((prev) => [
           ...prev,
-          { id: res.message_id, role: "assistant", content: res.answer, claims: res.claims, scope: res.scope },
+          {
+            id: res.message_id,
+            role: "assistant",
+            content: res.answer,
+            claims: res.claims,
+            scope: res.scope,
+            grounding: res.grounding ?? null,
+            sources: res.sources ?? [],
+          },
         ]);
         setSelectedId(res.message_id);
+        setFocused(null);
       } catch (err) {
         if (epoch.current !== myEpoch || controller.signal.aborted) return;
         const apiError = err instanceof ApiError ? err : new ApiError(0, "network_error");
@@ -97,6 +170,8 @@ export function useChat() {
         if (apiError.status === 429 || apiError.status === 422 || apiError.status === 0) {
           setMessages((prev) => prev.filter((m) => m.id !== tempId));
         }
+        // The chosen theme was removed: fall back to all themes.
+        if (apiError.error === "unknown_theme") setThemeId(null);
         setError({ error: apiError, message });
       } finally {
         if (epoch.current === myEpoch) {
@@ -105,7 +180,7 @@ export function useChat() {
         }
       }
     },
-    [],
+    [setThemeId],
   );
 
   const retry = useCallback(() => {
@@ -129,8 +204,22 @@ export function useChat() {
     setConversationId(null);
     setMessages([]);
     setSelectedId(null);
+    setFocused(null);
+    themeRef.current = null;
+    setThemeIdState(null);
     setError(null);
     setSending(false);
+  }, []);
+
+  /** A citation chip was clicked: select its message and the chunk it cites. */
+  const focusSource = useCallback((messageId: string, chunkId: string) => {
+    setSelectedId(messageId);
+    setFocused({ messageId, chunkId });
+  }, []);
+
+  const select = useCallback((id: string) => {
+    setSelectedId(id);
+    setFocused(null);
   }, []);
 
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant") ?? null;
@@ -143,7 +232,12 @@ export function useChat() {
     loadingHistory,
     error,
     selected,
-    select: setSelectedId,
+    select,
+    focusedChunkId: focused && selected && focused.messageId === selected.id ? focused.chunkId : null,
+    focusSource,
+    themes,
+    themeId,
+    setThemeId,
     send,
     retry,
     newChat,

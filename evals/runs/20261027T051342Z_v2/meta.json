@@ -1,0 +1,14 @@
+{
+  "base_url": "http://127.0.0.1:8020",
+  "started_at": "2026-10-27T05:13:42.628097+00:00",
+  "repeat": 3,
+  "mode": "m2",
+  "prompt_version": "v2",
+  "model": "openai/gpt-oss-120b",
+  "complete": true,
+  "only": "CITE-01,CITE-02,FILT-01,FILT-02,FILT-03,FILT-04,GRD-01,GRD-05,GRD-07,GRD-08,SAF-01,XDOC-01,XDOC-02,XDOC-03,XDOC-04,XDOC-05",
+  "questions": 16,
+  "claims_dropped_total": 0,
+  "claims_dropped_rise": false,
+  "regressions": []
+}

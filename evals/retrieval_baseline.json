@@ -1,0 +1,11 @@
+{
+  "run": "20261026T035839Z",
+  "embedding_model": "BAAI/bge-small-en-v1.5",
+  "k": 6,
+  "max_per_doc": 2,
+  "min_score": 0.73,
+  "doc_recall_at_k": 0.9643,
+  "doc_hit_at_k": 1.0,
+  "mrr": 0.9898,
+  "note": "Never lowered (T13). Raise it when a change improves recall; the runner fails CI below it."
+}

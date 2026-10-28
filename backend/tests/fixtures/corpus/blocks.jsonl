@@ -1,0 +1,27 @@
+{"document_id": "alpha-safety", "ordinal": 0, "type": "heading", "text": "Alpha Food Safety Guide", "heading_path": ["Alpha Food Safety Guide"], "level": 1, "page": 1}
+{"document_id": "alpha-safety", "ordinal": 1, "type": "paragraph", "text": "This guide explains how to store and cook food safely at home.", "heading_path": ["Alpha Food Safety Guide"], "page": 1}
+{"document_id": "alpha-safety", "ordinal": 2, "type": "heading", "text": "Fridge", "heading_path": ["Alpha Food Safety Guide", "Fridge"], "level": 3, "page": 2}
+{"document_id": "alpha-safety", "ordinal": 3, "type": "paragraph", "text": "Follow these rules for your fridge:", "heading_path": ["Alpha Food Safety Guide", "Fridge"], "page": 2}
+{"document_id": "alpha-safety", "ordinal": 4, "type": "list_item", "text": "Keep your fridge at 5°C or below, and check the temperature with a fridge thermometer every week.", "heading_path": ["Alpha Food Safety Guide", "Fridge"], "page": 2}
+{"document_id": "alpha-safety", "ordinal": 5, "type": "list_item", "text": "Store raw meat and poultry in sealed containers on the bottom shelf so juices cannot drip onto other food.", "heading_path": ["Alpha Food Safety Guide", "Fridge"], "page": 2}
+{"document_id": "alpha-safety", "ordinal": 6, "type": "list_item", "text": "Eat leftovers within 2 days, and do not reheat them more than once.", "heading_path": ["Alpha Food Safety Guide", "Fridge"], "page": 2}
+{"document_id": "alpha-safety", "ordinal": 7, "type": "heading", "text": "Note", "heading_path": ["Alpha Food Safety Guide", "Note"], "level": 3, "page": 2}
+{"document_id": "alpha-safety", "ordinal": 8, "type": "paragraph", "text": "Label leftovers with the date.", "heading_path": ["Alpha Food Safety Guide", "Note"], "page": 2}
+{"document_id": "alpha-safety", "ordinal": 9, "type": "heading", "text": "Freezer", "heading_path": ["Alpha Food Safety Guide", "Freezer"], "level": 4, "page": 3}
+{"document_id": "alpha-safety", "ordinal": 10, "type": "paragraph", "text": "Freeze food at -18°C or below. Frozen food stays safe indefinitely, but quality drops over time.", "heading_path": ["Alpha Food Safety Guide", "Freezer"], "page": 3}
+{"document_id": "alpha-safety", "ordinal": 11, "type": "table", "text": "| Food | Fridge | Freezer |", "heading_path": ["Alpha Food Safety Guide", "Freezer"], "page": 3, "caption": "Storage Chart", "header": ["Food", "Fridge", "Freezer"], "rows": [["Cooked rice", "1 day", "1 month"], ["Soup", "3 to 4 days", "2 to 3 months"], ["Raw chicken", "1 to 2 days", "9 months"]]}
+{"document_id": "alpha-safety", "ordinal": 12, "type": "heading", "text": "Cooking", "heading_path": ["Cooking"], "level": 1, "page": 4}
+{"document_id": "alpha-safety", "ordinal": 13, "type": "heading", "text": "Temperatures", "heading_path": ["Cooking", "Temperatures"], "level": 3, "page": 4}
+{"document_id": "alpha-safety", "ordinal": 14, "type": "paragraph", "text": "Cook poultry to an internal temperature of 74°C.", "heading_path": ["Cooking", "Temperatures"]}
+{"document_id": "beta-diet", "ordinal": 0, "type": "heading", "text": "Energy", "heading_path": ["Energy"], "level": 2, "page": 1}
+{"document_id": "beta-diet", "ordinal": 1, "type": "heading", "text": "How much energy?", "heading_path": ["Energy", "How much energy?"], "level": 3, "page": 1}
+{"document_id": "beta-diet", "ordinal": 2, "type": "paragraph", "text": "We all need different amounts of energy from food.", "heading_path": ["Energy", "How much energy?"], "page": 1}
+{"document_id": "beta-diet", "ordinal": 3, "type": "table", "text": "| Age | Daily energy requirements – kcal |", "heading_path": ["Energy", "How much energy?"], "page": 1, "header": ["Age", "Daily energy requirements – kcal"], "rows": [["5", "1482"], ["10", "2032"]]}
+{"document_id": "beta-diet", "ordinal": 4, "type": "heading", "text": "Sugar", "heading_path": ["Energy", "Sugar"], "level": 3, "page": 2}
+{"document_id": "beta-diet", "ordinal": 5, "type": "paragraph", "text": "Adults should limit free sugars to less than 10% of total energy intake.", "heading_path": ["Energy", "Sugar"], "page": 2}
+{"document_id": "gamma-salt", "ordinal": 0, "type": "heading", "text": "Salt", "heading_path": ["Salt"], "level": 1, "page": 1}
+{"document_id": "gamma-salt", "ordinal": 1, "type": "paragraph", "text": "Adults should eat less than 5 g of salt a day.", "heading_path": ["Salt"], "page": 1}
+{"document_id": "delta-chill", "ordinal": 0, "type": "heading", "text": "Chilling", "heading_path": ["Chilling"], "level": 1, "page": 1}
+{"document_id": "delta-chill", "ordinal": 1, "type": "paragraph", "text": "Cool leftovers quickly and put them in the fridge within 2 hours.", "heading_path": ["Chilling"], "page": 1}
+{"document_id": "epsilon-fats", "ordinal": 0, "type": "heading", "text": "Fats", "heading_path": ["Fats"], "level": 1, "page": 1}
+{"document_id": "epsilon-fats", "ordinal": 1, "type": "paragraph", "text": "Swap saturated fats for unsaturated fats such as olive oil.", "heading_path": ["Fats"], "page": 1}

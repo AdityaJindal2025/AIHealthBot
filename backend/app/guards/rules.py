@@ -239,3 +239,50 @@ OUTPUT_RULES: list[Rule] = [
 ]
 
 ALL_RULES: list[Rule] = [*INPUT_RULES, *FOLLOW_UP_RULES, *OUTPUT_RULES]
+
+
+# --- claim rules (Milestone 2, FAP §9, §10.2) -------------------------------------------------
+#
+# These run on each grounded claim, inside the citation checker. A match drops that claim and
+# records it in `citation_events`, instead of declining the whole answer: the fault is how one
+# claim is framed, not out-of-scope content, so the other validated claims still ship.
+
+
+@dataclass(frozen=True)
+class ClaimRule:
+    id: str
+    reason: Literal["blended_attribution", "personal_framing"]
+    pattern: re.Pattern[str]
+
+
+# Phrases that speak for more than one document or rank them (FPS §4.4, Rule 5). Shared with the
+# eval runner's blend check, so the two can never disagree.
+BLEND_PHRASES: list[str] = [
+    r"the guidelines (?:say|state|recommend|agree|suggest)",
+    r"(?:the )?guidelines agree",
+    r"experts (?:agree|say|recommend)",
+    r"all (?:the )?(?:sources|guidelines|documents|guidance)",
+    r"both (?:documents|sources|guidelines) (?:agree|say|recommend)",
+    r"(?:the )?sources agree",
+    r"(?:it is|it's) (?:generally|widely|universally) (?:agreed|accepted|recommended)",
+    r"the (?:scientific )?consensus",
+    r"(?:more|most|less|least) (?:reliable|trustworthy|accurate|authoritative|correct)",
+    r"(?:a |the )?better (?:source|guide|guideline|advice)",
+    r"you should (?:follow|trust|believe|go with)",
+]
+
+_QTY = r"\d+(?:[.,]\d+)?\s?(?:g|grams?|mg|mcg|µg|kcal|calories|kj|portions?|servings?|teaspoons?|tsp|cups?|ml|litres?|%)"
+
+CLAIM_RULES: list[ClaimRule] = [
+    ClaimRule("OUT-BLEND-01", "blended_attribution", _p(r"\b(?:" + "|".join(BLEND_PHRASES) + r")\b")),
+    # Population guidance turned into a personal quantity (FPS §4.3, Rule 3). Food-safety
+    # instructions ("keep your fridge at 5°C", "eat leftovers within 2 days") are not quantities of
+    # a nutrient, so they pass.
+    ClaimRule("OUT-PERS-01", "personal_framing",
+              _p(rf"\byou (?:should|need to|must|ought to|have to) (?:eat|have|drink|consume|get|aim for|limit yourself"
+                 rf" to|stick to|keep (?:it|your intake) (?:under|below|to))\b[^.]{{0,40}}?{_QTY}")),
+    ClaimRule("OUT-PERS-02", "personal_framing",
+              _p(r"\byour (?:daily|own|personal|recommended) (?:\w+ )?(?:intake|allowance|limit|target|needs?|requirement)")),
+    ClaimRule("OUT-PERS-03", "personal_framing",
+              _p(rf"\b(?:for you|you need|your body needs)\b[^.]{{0,30}}?{_QTY}")),
+]

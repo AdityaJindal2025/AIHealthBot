@@ -1,0 +1,42 @@
+[
+ {
+  "id": "XDOC-02",
+  "group": "cross_document",
+  "pending_decision": false,
+  "passed": true,
+  "excluded": false,
+  "answered_repeats": 3,
+  "repeats": 3,
+  "status": "in_scope",
+  "claims": 8,
+  "words": 167,
+  "answer": "These documents each address this:\n\nHow to chill, freeze and defrost food safely (Food Standards Agency, 2017):\n- Your fridge should be set between 0 and 5°C. [3]\n- Your fridge should be set between 0 and 5°C. [4]\n- Leftovers should be eaten within 48 hours or frozen if they cannot be eaten sooner. [3]\n\nKitchen Companion: Your Safe Food Handbook (U.S. Department of Agriculture, Food Safety and Inspection Service, 2015):\n- Cold food should be kept at 40 °F (4.44 °C) or below. [5]\n\nCold Food Storage Chart (FoodSafety.gov (U.S. Department of Health and Human Services), 2023):\n- Leftovers can be kept in the fridge for 3 to 4 days. [6]\n- Soups and stews with vegetables or meat added can be kept in the fridge for 3 to 4 days. [6]\n- Cooked meat or poultry leftovers can be kept in the fridge for 3 to 4 days. [6]\n- Pizza leftovers can be kept in the fridge for 3 to 4 days. [6]",
+  "failed_checks": [],
+  "claims_dropped": 0,
+  "cited_documents": [
+   "cold-food-storage",
+   "fsa-chill",
+   "kitchen-companion"
+  ],
+  "grounding": "grounded"
+ },
+ {
+  "id": "FILT-01",
+  "group": "filtered",
+  "pending_decision": false,
+  "passed": true,
+  "excluded": false,
+  "answered_repeats": 2,
+  "repeats": 3,
+  "status": "in_scope",
+  "claims": 2,
+  "words": 58,
+  "answer": "From How to chill, freeze and defrost food safely (Food Standards Agency, 2017):\n- Defrost meat in the fridge using a container big enough to catch any drips, ensuring it is fully thawed before cooking [1]\n- The safest way to defrost meat is in the fridge overnight so it never enters the 8‑63 °C danger zone [6]",
+  "failed_checks": [],
+  "claims_dropped": 0,
+  "cited_documents": [
+   "fsa-chill"
+  ],
+  "grounding": "grounded"
+ }
+]
