@@ -31,6 +31,8 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     # Restrict retrieval to one registry document (FAP §7.2). Unknown IDs get a 422 from the service.
     document_id: str | None = Field(default=None, min_length=1, max_length=64)
+    # Restrict retrieval to a theme's documents (`corpus/themes.json`). Not combined with document_id.
+    theme_id: str | None = Field(default=None, min_length=1, max_length=64)
 
     @field_validator("message", mode="before")
     @classmethod
@@ -68,6 +70,7 @@ class Grounding(BaseModel):
 
     status: Literal["grounded", "not_covered"]
     filter_document_id: str | None = None
+    theme_id: str | None = None
     searched: list[SearchedDocument]
     top_score: float | None = None
 
@@ -138,3 +141,14 @@ class DocumentOut(BaseModel):
 
 class DocumentsOut(BaseModel):
     documents: list[DocumentOut]
+
+
+class ThemeOut(BaseModel):
+    theme_id: str
+    name: str
+    description: str
+    document_ids: list[str]
+
+
+class ThemesOut(BaseModel):
+    themes: list[ThemeOut]

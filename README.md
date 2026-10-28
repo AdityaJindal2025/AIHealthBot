@@ -5,17 +5,35 @@ A chat assistant for general questions about food, nutrition and food safety.
 - **Milestone 1** was deliberately **ungrounded**: answers came from the model's memory and every `source` was `null` ([Docs/problemStatement.md](Docs/problemStatement.md)).
 - **Milestone 2** answers **only from 7 official public guidance documents**. Every claim carries a citation (document, publisher, year, link), cross-document answers stay separate per document, and when the guidance doesn't cover a question the assistant says so and names what it searched ([Docs/featureProblemStatement.md](Docs/featureProblemStatement.md), [plan](Docs/featureImplementationPlan.md)).
 
-- **Frontend:** Next.js + Tailwind, deployed to Vercel ([frontend/](frontend/))
-- **Backend:** FastAPI + SQLAlchemy, deployed to Railway with Postgres ([backend/](backend/))
-- **Evals:** fixed regression question set and runner ([evals/](evals/))
-- **Corpus:** 1,001 parsed blocks from 7 documents, plus a document registry ([backend/corpus/](backend/corpus/))
-- **Plans:** M1 [architecturePlan.md](Docs/architecturePlan.md), [implementationPlan.md](Docs/implementationPlan.md), [edgeCases.md](Docs/edgeCases.md); M2 [featureArchitecturePlan.md](Docs/featureArchitecturePlan.md), [featureImplementationPlan.md](Docs/featureImplementationPlan.md)
+- **Frontend:** Next.js 16 + Tailwind, to be deployed on Vercel ([frontend/](frontend/)). Chat with citation chips, a sources panel showing the retrieved excerpts, and a **"Select theme"** filter (5 themes, each a group of the 7 documents).
+- **Backend:** FastAPI + SQLAlchemy, to be deployed on Railway with Postgres + pgvector ([backend/](backend/)). The embedding model runs inside the backend container.
+- **Model:** `openai/gpt-oss-120b` on **Groq**, with strict structured output. The brief allowed the Anthropic or OpenAI API; Groq is a documented deviation ([problemStatement.md](Docs/problemStatement.md) §4).
+- **Evals:** fixed, append-only regression question set (83 entries) and runner ([evals/](evals/)), plus a retrieval eval.
+- **Corpus:** 1,001 parsed blocks from 7 documents, a verified document registry and the theme list ([backend/corpus/](backend/corpus/)).
+- **Plans:** M1 [problemStatement.md](Docs/problemStatement.md), [architecturePlan.md](Docs/architecturePlan.md), [implementationPlan.md](Docs/implementationPlan.md) (Phase 9 is the deploy plan), [edgeCases.md](Docs/edgeCases.md); M2 [featureProblemStatement.md](Docs/featureProblemStatement.md), [featureArchitecturePlan.md](Docs/featureArchitecturePlan.md), [featureImplementationPlan.md](Docs/featureImplementationPlan.md). Results: [evalResults.md](Docs/evalResults.md), [failureLog.md](Docs/failureLog.md).
 
-Public URLs: _to be added after the Phase 9 deploy._
+Public URLs: _not deployed yet; added after the [Phase 9](Docs/implementationPlan.md#phase-9-production-deploy) deploy._
+
+## Status (2026-10-28)
+
+| Milestone | State | Open |
+|---|---|---|
+| **1: ungrounded baseline** ([PS](Docs/problemStatement.md)) | Built and measured. 9 of 12 acceptance items ticked with evidence ([PS §6](Docs/problemStatement.md#6-acceptance-checklist)) | Public deploy; human review of the M1 claims ([failureLog.md](Docs/failureLog.md) §1–§4); push and merge the M2 branch |
+| **2: grounded answers** ([FPS](Docs/featureProblemStatement.md)) | Built. Grounded real-model runs on 2026-10-27 met T8–T12 | Public deploy; human citation review ([failureLog.md](Docs/failureLog.md) §6) |
+
+**What grounding changed** (same 55 questions, same model, 3 repeats each; [failureLog.md](Docs/failureLog.md) §5):
+
+| Measure | M1 (model memory) | M2 (grounded) |
+|---|---|---|
+| Claims with a source | 0 of 333 | every claim (173 of 173 across all 83 questions) |
+| Questions whose numbers changed between repeats | 17 of 55 (a banana was 90, 105, 120, 130 or 135 calories) | 0 of 55 |
+| In-scope questions answered | 24, all unverifiable | 7 grounded with citations; 16 "not covered", naming the documents searched |
+
+The cost of grounding is coverage: the 7 documents hold no food-composition data and few food-safety specifics, so those questions are now answered "not covered" instead of with invented numbers.
 
 ## How a request flows
 
-**Grounded (M2, `RAG_ENABLED=true`, the default):** `POST /api/chat` → input scope guard → retrieve (embed query → exact cosine search, k=6, at most 2 per document) → restricted top hit? decline → top score under the floor? "not covered" → Groq with strict structured output over labelled sources `S1..S6` → strict validation → citation checks → answer composed by the backend, grouped per document → output scope guard → Postgres → JSON envelope with `grounding` and `sources`.
+**Grounded (M2, `RAG_ENABLED=true`, the default):** `POST /api/chat` → input scope guard → retrieve (embed query → exact cosine search over all documents, or only the chosen theme's or document's, k=6, at most 2 per document) → restricted top hit? decline → top score under the floor? "not covered" → Groq with strict structured output over labelled sources `S1..S6` → strict validation → citation checks → answer composed by the backend, grouped per document → output scope guard → Postgres → JSON envelope with `grounding` and `sources`.
 
 **M1 (`RAG_ENABLED=false` and `PROMPT_VERSION=v1`):** `POST /api/chat` → input scope guard → Groq with strict structured output → strict Pydantic validation → output scope guard → Postgres → the exact M1 envelope. This is the kill switch: it needs no redeploy.
 
@@ -60,7 +78,9 @@ The floor is calibrated for this embedding model. Changing `EMBEDDING_MODEL` mea
 3. In grounded mode the model returns `GroundedOutput` (`coverage` plus claims that cite a `source_label`), not `AssistantOutput`. The backend builds `AssistantOutput` from the claims that pass the citation checks, filling `Source` from the registry and the retrieved chunk. **The model never writes a publisher, year or URL.**
 4. The M1 model-facing types are kept as `UngroundedClaim` / `UngroundedOutput` (`source: null`), so the M1 path and its schema test still hold.
 
-The API envelope gained optional fields: `grounding` (status, filter, searched documents, top score), `sources` (the retrieved chunks with a `cited` flag), `meta.claims_dropped`, `meta.corpus_version`, the `retrieval` scope stage, and `document_id` on the request. New endpoint: `GET /api/documents`. `/api/health` now reports the index.
+The API envelope gained optional fields: `grounding` (status, filter, searched documents, top score), `sources` (the retrieved chunks with a `cited` flag), `meta.claims_dropped`, `meta.corpus_version`, the `retrieval` scope stage, and `document_id` and `theme_id` on the request (one or the other). New endpoints: `GET /api/documents` and `GET /api/themes`. `/api/health` now reports the index.
+
+**Themes.** The UI's "Select theme" filter offers the 5 themes in `backend/corpus/themes.json`. Each names a group of registry documents; a themed request searches only those documents (the 0.73 floor still applies, and the per-document cap rises to `ceil(k / documents)` so a two-document theme can fill k slots). The file is checked against the registry when loaded, and a test requires every document to be in some theme.
 
 ## Local setup
 
@@ -130,7 +150,7 @@ The scope-guard cases live in [backend/tests/guard_cases.yaml](backend/tests/gua
 backend/.venv/bin/python evals/run_evals.py --base-url http://localhost:8000 [--repeat 3] [--only NUT-01,MT-02]
 ```
 
-Each run writes `evals/runs/<UTC timestamp>_<prompt_version>/` with `results.jsonl`, `summary.md` and `meta.json`. The summary diffs against the latest complete run **with the same model**. The runner throttles to one request every 3.5 s to stay under the rate limit, retries `429`s, and records them separately from model results. Exit code `1` means regressions, `2` means the run was interrupted (never use a partial run as a baseline).
+Each run writes `evals/runs/<UTC timestamp>_<prompt_version>/` with `results.jsonl`, `summary.md` and `meta.json`. The summary diffs against the latest complete run **with the same model**. The runner paces requests (one every 3.5 s in M1 mode, 10 s in grounded mode; `--delay` overrides) and slows down by itself after a rate limit. It retries `429`s and Groq's `503 upstream_rate_limited`, honouring `Retry-After`. Requests that never get an answer are recorded as excluded, separately from model results, and a question is scored on the repeats that were answered. `--rescore RUN_DIR` rebuilds a run's summary from its stored results without calling the model. Exit code `1` means regressions, `2` means the run was interrupted (never use a partial run as a baseline).
 
 The runner asks the target's `/api/health` whether it is grounded (`--mode auto`). Grounded runs add the Milestone 2 groups (`GRD`, `XDOC`, `NIC`, `FILT`, `RESTR`, `CITE`) and checks: every claim has a complete source, no blend phrases, filters respected, `claims_dropped` reported. They also add the T8–T14 table, and diff only against earlier grounded runs.
 
@@ -146,31 +166,47 @@ To change the system prompt:
 
 The `Evals` GitHub workflow runs the suite against a deployed URL. It is manual-trigger only because it spends API credits.
 
-## Deploy (Phase 9; Milestone 2 changes in Phase 10)
+**Groq quota.** The free tier allows `openai/gpt-oss-120b` 8,000 tokens a minute and **200,000 tokens a day**. A grounded answer uses about 3,000 tokens, so a full grounded run with `--repeat 3` (about 200 model calls) does not fit in one day. Use `--repeat 1`, split the run across days, or upgrade the tier. When Groq refuses a request, the failure's `error_detail` names the limit that was hit.
 
-**Milestone 2 changes:**
+## Deploy
 
-- **Image:** the image installs CPU-only torch and bakes the bge model in (`HF_HUB_OFFLINE=1`). It also copies `corpus/`, and its start command builds the index (`--if-changed`) before uvicorn.
-- **Health check:** `railway.json` waits up to 300 s, and `/api/health` returns `503` until the index is ready, so a broken build never takes traffic.
-- **Postgres:** Railway Postgres needs the `vector` extension. Check that `CREATE EXTENSION vector` works, or move to Railway's pgvector template.
-- **Railway variables:** add `RAG_ENABLED=true`, `PROMPT_VERSION=v2`, the retrieval settings above and `ALLOW_UNVERIFIED_REGISTRY=false`.
-- **Memory:** the embedder and torch need roughly 0.5–1 GB more RAM, so check the plan.
-- **Registry:** verified on 2026-10-27 (`backend/corpus/README.md`). Any new or edited entry must be verified again, or the production start fails.
-- **Kill switch:** set `RAG_ENABLED=false` and `PROMPT_VERSION=v1`. Migration `0002` is additive, so the M1 image also runs on the M2 schema.
+Backend and Postgres on **Railway**, frontend on **Vercel**. The full checklist (order, every setting and variable, the checks, release and rollback, and troubleshooting) is **Phase 9 of [implementationPlan.md](Docs/implementationPlan.md#phase-9-production-deploy)**. This is the summary.
 
-**Steps:**
+| Piece | Host | Built from |
+|---|---|---|
+| Frontend | Vercel, `https://<project>.vercel.app` | `frontend/` |
+| Backend | Railway, `https://<backend>.up.railway.app` | `backend/Dockerfile` + `backend/railway.json` |
+| Database | Railway Postgres **with pgvector**, same project | Railway template |
 
-1. **Railway:** create a project from this repo with root directory `backend/` (it uses `Dockerfile` and `railway.json`), and add the Postgres plugin.
-   - Set `GROQ_API_KEY`, `MODEL_ID`, `PROMPT_VERSION=v1`, `TRUST_PROXY=true`, `CORS_ORIGINS=https://<prod>.vercel.app` and reference `DATABASE_URL`.
-   - Migrations run on every start, so keep **one replica**.
-2. **Vercel:** import the repo with root directory `frontend/` and set `NEXT_PUBLIC_API_BASE_URL=https://<backend>.up.railway.app`.
-3. **Checks:**
-   - There is no `gsk_` string (Groq key prefix) in the JS bundle (CI also checks this).
-   - The browser only calls the Railway domain.
-   - 21 fast requests produce a `429`.
-   - The production eval run is committed.
+**On every start** the backend container runs `alembic upgrade head` → `python -m app.rag.build_index --if-changed` (rebuilds the 209-chunk index only if the corpus, chunker settings or model changed) → uvicorn. The image has CPU-only torch and the bge model baked in (`HF_HUB_OFFLINE=1`), so nothing is downloaded at runtime. `/api/health` returns `503` until the database and the index are ready, and `railway.json` gives the health check 300 s.
 
-If requests suddenly fail with `api_error`, check the Groq usage limits before debugging the code.
+**Order:** database → backend → frontend → CORS. Each step needs a value from the one before.
+
+1. **Railway database:** add PostgreSQL (name it `Postgres`) and run `CREATE EXTENSION IF NOT EXISTS vector;` in its SQL console. If that fails, use Railway's pgvector template instead.
+2. **Railway backend:** deploy from this repo with **Root Directory** `/backend`, **Config File Path** `/backend/railway.json`, **Watch Paths** `/backend/**`, **Wait for CI** on, no custom start command, one replica, at least 1 GB of memory. Variables:
+   - `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `GROQ_API_KEY` (sealed), `MODEL_ID=openai/gpt-oss-120b`
+   - `RAG_ENABLED=true`, `PROMPT_VERSION=v2`, `ALLOW_UNVERIFIED_REGISTRY=false`
+   - `CORS_ORIGINS=https://<project>.vercel.app`, `TRUST_PROXY=true`
+   - leave the `RETRIEVAL_*`, `CHUNK_*` and `EMBEDDING_MODEL` settings unset (the defaults are the calibrated values) and don't set `PORT`
+3. **Vercel frontend:** import the repo with **Root Directory** `frontend` and set `NEXT_PUBLIC_API_BASE_URL=https://<backend>.up.railway.app` for Production. It is inlined at build time, so redeploy after changing it. Use the same Node major version as CI.
+4. **CORS:** make sure `CORS_ORIGINS` is the exact Vercel production origin, then check the preflight with `curl -si -X OPTIONS …/api/chat -H "Origin: https://<project>.vercel.app" -H "Access-Control-Request-Method: POST"`.
+
+**Checks after deploying:**
+
+- `/api/health` shows `db: ok` and the index `ready` with 209 chunks; `/api/documents` lists 7 documents with years and links; `/api/themes` lists 5 themes.
+- In the browser: the theme dropdown appears, an answer shows citation chips and sources, an off-theme question gets "not covered" naming only that theme's documents, and a calorie-target question is declined.
+- There is no `gsk_` string (the Groq key prefix) in the JS bundle (CI also checks this), and the browser calls only the Railway domain.
+- 21 fast requests produce a `429` (use a declined question, which never calls Groq).
+- Run the evals against production with `--repeat 1`, commit the run and update [evalResults.md](Docs/evalResults.md). Then add the public URLs above.
+
+**Before real use:** the free Groq tier gives the whole deployment about 60 grounded answers a day. After that the UI shows "The assistant is busy right now". Upgrade the Groq tier and set a spend limit.
+
+**Release and rollback:**
+
+- **Release:** merging to `main` deploys only what changed. Railway redeploys `backend/` after CI passes, and Vercel rebuilds `frontend/`.
+- **Kill switch:** `RAG_ENABLED=false` with `PROMPT_VERSION=v1` restores the exact M1 behaviour with no code deploy. The theme filter hides itself.
+- **Rollback:** migrations are additive, so Railway can redeploy an older image on the newer schema. Vercel has Instant Rollback.
+- **Registry changes:** any new or edited registry entry must be verified (`backend/corpus/README.md`), or the production start refuses it.
 
 ## Decisions taken on open edge cases
 

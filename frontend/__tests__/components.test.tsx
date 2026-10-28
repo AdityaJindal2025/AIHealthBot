@@ -2,7 +2,6 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { charCount } from "@/components/ChatInput";
-import { DocumentFilter } from "@/components/DocumentFilter";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { MessageBubble } from "@/components/MessageBubble";
 import {
@@ -12,8 +11,9 @@ import {
   SourcesPanel,
   sourceElementId,
 } from "@/components/SourcesPanel";
+import { ThemeFilter } from "@/components/ThemeFilter";
 import { ApiError } from "@/lib/api";
-import { citationText, type ChatMessage, type DocumentOut, type RetrievedSource, type Source } from "@/lib/types";
+import { citationText, type ChatMessage, type RetrievedSource, type Source, type ThemeOut } from "@/lib/types";
 import { useChat } from "@/lib/useChat";
 
 afterEach(() => {
@@ -244,40 +244,41 @@ describe("citationText", () => {
   });
 });
 
-const DOCS: DocumentOut[] = [
-  { document_id: "eatwell-guide", title: "The Eatwell Guide", publisher: "Public Health England", publisher_short: "PHE", year: 2016, url: null, chunk_count: 28 },
-  { document_id: "fsa-chill", title: "How to chill, freeze and defrost food safely", publisher: "Food Standards Agency", publisher_short: "FSA", year: null, url: null, chunk_count: 7 },
+const THEMES: ThemeOut[] = [
+  { theme_id: "food-storage", name: "Food storage & refrigeration", description: "How long foods keep", document_ids: ["cold-food-storage", "fsa-chill"] },
+  { theme_id: "sugar-salt-fat", name: "Sugar, salt & fats", description: "Limits on sugar, salt and fats", document_ids: ["who-healthy-diet", "eatwell-guide"] },
 ];
 
-describe("DocumentFilter", () => {
-  it("lists all documents and reports the choice", () => {
+describe("ThemeFilter", () => {
+  it("lists all themes and reports the choice", () => {
     const onChange = vi.fn();
-    render(<DocumentFilter documents={DOCS} value={null} onChange={onChange} />);
-    const select = screen.getByLabelText("Search in:") as HTMLSelectElement;
+    render(<ThemeFilter themes={THEMES} value={null} onChange={onChange} />);
+    const select = screen.getByLabelText("Select theme:") as HTMLSelectElement;
     expect([...select.options].map((o) => o.textContent)).toEqual([
-      "All documents",
-      "The Eatwell Guide (PHE)",
-      "How to chill, freeze and defrost food safely (FSA)",
+      "All themes",
+      "Food storage & refrigeration",
+      "Sugar, salt & fats",
     ]);
-    fireEvent.change(select, { target: { value: "fsa-chill" } });
-    expect(onChange).toHaveBeenCalledWith("fsa-chill");
+    expect(select.options[1].title).toBe("How long foods keep");
+    fireEvent.change(select, { target: { value: "sugar-salt-fat" } });
+    expect(onChange).toHaveBeenCalledWith("sugar-salt-fat");
     fireEvent.change(select, { target: { value: "" } });
     expect(onChange).toHaveBeenLastCalledWith(null);
   });
 
-  it("is hidden when there are no documents", () => {
-    const { container } = render(<DocumentFilter documents={[]} value={null} onChange={() => {}} />);
+  it("is hidden when there are no themes", () => {
+    const { container } = render(<ThemeFilter themes={[]} value={null} onChange={() => {}} />);
     expect(container.innerHTML).toBe("");
   });
 });
 
-describe("useChat document filter", () => {
+describe("useChat theme filter", () => {
   function mockFetch() {
     const calls: { url: string; body: unknown }[] = [];
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : null });
-      if (url.endsWith("/api/documents")) {
-        return new Response(JSON.stringify({ documents: DOCS }), { status: 200 });
+      if (url.endsWith("/api/themes")) {
+        return new Response(JSON.stringify({ themes: THEMES }), { status: 200 });
       }
       return new Response(
         JSON.stringify({
@@ -295,26 +296,26 @@ describe("useChat document filter", () => {
     return calls;
   }
 
-  it("sends document_id with the next message and remembers it for the conversation", async () => {
+  it("sends theme_id with the next message and remembers it for the conversation", async () => {
     const calls = mockFetch();
     const { result } = renderHook(() => useChat());
-    await waitFor(() => expect(result.current.documents).toHaveLength(2));
+    await waitFor(() => expect(result.current.themes).toHaveLength(2));
 
     await act(async () => {
       await result.current.send("first question");
     });
     expect(calls.find((c) => c.url.endsWith("/api/chat"))?.body).toEqual({ message: "first question" });
 
-    act(() => result.current.setDocumentId("fsa-chill"));
+    act(() => result.current.setThemeId("food-storage"));
     await act(async () => {
       await result.current.send("How do I defrost meat?");
     });
     const chats = calls.filter((c) => c.url.endsWith("/api/chat"));
-    expect(chats[1].body).toEqual({ conversation_id: "c1", message: "How do I defrost meat?", document_id: "fsa-chill" });
-    expect(window.localStorage.getItem("nutrition-assistant.document-filter.c1")).toBe("fsa-chill");
+    expect(chats[1].body).toEqual({ conversation_id: "c1", message: "How do I defrost meat?", theme_id: "food-storage" });
+    expect(window.localStorage.getItem("nutrition-assistant.theme-filter.c1")).toBe("food-storage");
 
     act(() => result.current.newChat());
-    expect(result.current.documentId).toBeNull();
+    expect(result.current.themeId).toBeNull();
   });
 
   it("keeps grounding and sources on an M2 response, and tolerates an M1 response", async () => {

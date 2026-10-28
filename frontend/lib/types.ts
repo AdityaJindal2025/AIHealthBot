@@ -50,6 +50,7 @@ export type SearchedDocument = {
 export type Grounding = {
   status: "grounded" | "not_covered";
   filter_document_id: string | null;
+  theme_id?: string | null;
   searched: SearchedDocument[];
   top_score: number | null;
 };
@@ -118,6 +119,18 @@ export type DocumentOut = {
 
 export type DocumentsOut = {
   documents: DocumentOut[];
+};
+
+/** A named group of registry documents, offered as the "Select theme" filter. */
+export type ThemeOut = {
+  theme_id: string;
+  name: string;
+  description: string;
+  document_ids: string[];
+};
+
+export type ThemesOut = {
+  themes: ThemeOut[];
 };
 
 /** A message as the UI holds it. */

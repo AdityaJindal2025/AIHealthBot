@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ApiError, getConversation, getDocuments, sendMessage } from "./api";
-import type { ChatMessage, DocumentOut, MessageOut } from "./types";
+import { ApiError, getConversation, getThemes, sendMessage } from "./api";
+import type { ChatMessage, MessageOut, ThemeOut } from "./types";
 
 const STORAGE_KEY = "nutrition-assistant.conversation-id";
-// The "Search in" document filter is remembered per conversation (FAP §12).
-const FILTER_KEY_PREFIX = "nutrition-assistant.document-filter.";
+// The "Select theme" filter is remembered per conversation.
+const FILTER_KEY_PREFIX = "nutrition-assistant.theme-filter.";
 
 function readStoredId(): string | null {
   try {
@@ -34,9 +34,9 @@ function readStoredFilter(conversationId: string): string | null {
   }
 }
 
-function writeStoredFilter(conversationId: string, documentId: string | null) {
+function writeStoredFilter(conversationId: string, themeId: string | null) {
   try {
-    if (documentId) window.localStorage.setItem(FILTER_KEY_PREFIX + conversationId, documentId);
+    if (themeId) window.localStorage.setItem(FILTER_KEY_PREFIX + conversationId, themeId);
     else window.localStorage.removeItem(FILTER_KEY_PREFIX + conversationId);
   } catch {
     // ignore: the filter still applies for this page view
@@ -68,37 +68,37 @@ export function useChat() {
   const [error, setError] = useState<ChatErrorState | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focused, setFocused] = useState<FocusedSource | null>(null);
-  const [documents, setDocuments] = useState<DocumentOut[]>([]);
-  const [documentId, setDocumentIdState] = useState<string | null>(null);
+  const [themes, setThemes] = useState<ThemeOut[]>([]);
+  const [themeId, setThemeIdState] = useState<string | null>(null);
 
   // Each "New chat" starts a new epoch; a response from an older epoch is dropped (EC FE-03).
   const epoch = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
   const conversationRef = useRef<string | null>(null);
-  const documentRef = useRef<string | null>(null);
+  const themeRef = useRef<string | null>(null);
 
-  // The document list is loaded once. If it fails (or an M1 backend has no endpoint) the filter is hidden.
+  // The theme list is loaded once. If it fails (or an M1 backend has no endpoint) the filter is hidden.
   useEffect(() => {
     const controller = new AbortController();
-    getDocuments(controller.signal).then(
-      (res) => setDocuments(res.documents),
+    getThemes(controller.signal).then(
+      (res) => setThemes(res.themes),
       () => {},
     );
     return () => controller.abort();
   }, []);
 
-  const setDocumentId = useCallback((id: string | null) => {
-    documentRef.current = id;
-    setDocumentIdState(id);
+  const setThemeId = useCallback((id: string | null) => {
+    themeRef.current = id;
+    setThemeIdState(id);
     if (conversationRef.current) writeStoredFilter(conversationRef.current, id);
   }, []);
 
-  // A stored filter for a document that no longer exists is dropped.
+  // A stored filter for a theme that no longer exists is dropped.
   useEffect(() => {
-    if (documents.length && documentRef.current && !documents.some((d) => d.document_id === documentRef.current)) {
-      setDocumentId(null);
+    if (themes.length && themeRef.current && !themes.some((t) => t.theme_id === themeRef.current)) {
+      setThemeId(null);
     }
-  }, [documents, setDocumentId]);
+  }, [themes, setThemeId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -112,8 +112,8 @@ export function useChat() {
           setConversationId(conv.id);
           setMessages(conv.messages.map(fromServer));
           const filter = readStoredFilter(conv.id);
-          documentRef.current = filter;
-          setDocumentIdState(filter);
+          themeRef.current = filter;
+          setThemeIdState(filter);
         } catch (err) {
           // Unknown ID (DB reset, other environment): start fresh, no error loop (EC FE-01).
           if (err instanceof ApiError && err.status === 404) writeStoredId(null);
@@ -143,12 +143,12 @@ export function useChat() {
       ]);
 
       try {
-        const res = await sendMessage(conversationRef.current, message, documentRef.current, controller.signal);
+        const res = await sendMessage(conversationRef.current, message, themeRef.current, controller.signal);
         if (epoch.current !== myEpoch) return;
         conversationRef.current = res.conversation_id;
         setConversationId(res.conversation_id);
         writeStoredId(res.conversation_id);
-        writeStoredFilter(res.conversation_id, documentRef.current);
+        writeStoredFilter(res.conversation_id, themeRef.current);
         setMessages((prev) => [
           ...prev,
           {
@@ -170,8 +170,8 @@ export function useChat() {
         if (apiError.status === 429 || apiError.status === 422 || apiError.status === 0) {
           setMessages((prev) => prev.filter((m) => m.id !== tempId));
         }
-        // The chosen document was removed from the registry: fall back to all documents.
-        if (apiError.error === "unknown_document") setDocumentId(null);
+        // The chosen theme was removed: fall back to all themes.
+        if (apiError.error === "unknown_theme") setThemeId(null);
         setError({ error: apiError, message });
       } finally {
         if (epoch.current === myEpoch) {
@@ -180,7 +180,7 @@ export function useChat() {
         }
       }
     },
-    [setDocumentId],
+    [setThemeId],
   );
 
   const retry = useCallback(() => {
@@ -205,8 +205,8 @@ export function useChat() {
     setMessages([]);
     setSelectedId(null);
     setFocused(null);
-    documentRef.current = null;
-    setDocumentIdState(null);
+    themeRef.current = null;
+    setThemeIdState(null);
     setError(null);
     setSending(false);
   }, []);
@@ -235,9 +235,9 @@ export function useChat() {
     select,
     focusedChunkId: focused && selected && focused.messageId === selected.id ? focused.chunkId : null,
     focusSource,
-    documents,
-    documentId,
-    setDocumentId,
+    themes,
+    themeId,
+    setThemeId,
     send,
     retry,
     newChat,

@@ -8,6 +8,7 @@ never loses results the way a filtered HNSW search can.
 Both rank by score, then by `chunk_id`, so they return the same order for the same vectors.
 """
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -26,14 +27,16 @@ class Hit:
 
 
 class VectorStore(Protocol):
-    def search(self, query_vec: np.ndarray, n: int, *, document_id: str | None = None) -> list[Hit]: ...
+    def search(self, query_vec: np.ndarray, n: int, *, document_id: str | None = None,
+               document_ids: Collection[str] | None = None) -> list[Hit]: ...
 
 
 class PgVectorStore:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def search(self, query_vec: np.ndarray, n: int, *, document_id: str | None = None) -> list[Hit]:
+    def search(self, query_vec: np.ndarray, n: int, *, document_id: str | None = None,
+               document_ids: Collection[str] | None = None) -> list[Hit]:
         distance = IndexedChunk.embedding.op("<=>", return_type=Float)(np.asarray(query_vec, dtype=np.float32))
         stmt = (
             select(IndexedChunk, distance.label("distance"))
@@ -43,6 +46,8 @@ class PgVectorStore:
         )
         if document_id is not None:
             stmt = stmt.where(IndexedChunk.document_id == document_id)
+        if document_ids is not None:
+            stmt = stmt.where(IndexedChunk.document_id.in_(list(document_ids)))
         return [Hit(chunk, 1.0 - float(dist)) for chunk, dist in self.db.execute(stmt).all()]
 
 
@@ -83,7 +88,8 @@ class MemoryStore:
         _CACHE[key] = matrix
         return matrix
 
-    def search(self, query_vec: np.ndarray, n: int, *, document_id: str | None = None) -> list[Hit]:
+    def search(self, query_vec: np.ndarray, n: int, *, document_id: str | None = None,
+               document_ids: Collection[str] | None = None) -> list[Hit]:
         matrix = self._matrix()
         if matrix is None or not matrix.chunk_ids:
             return []
@@ -91,6 +97,8 @@ class MemoryStore:
         candidates = np.arange(len(matrix.chunk_ids))
         if document_id is not None:
             candidates = candidates[matrix.document_ids == document_id]
+        if document_ids is not None:
+            candidates = candidates[np.isin(matrix.document_ids[candidates], list(document_ids))]
         ranked = sorted(candidates, key=lambda i: (-float(scores[i]), matrix.chunk_ids[i]))[:n]
         chunks = repo.get_chunks(self.db, [matrix.chunk_ids[i] for i in ranked])
         return [Hit(chunk, float(scores[i])) for chunk, i in zip(chunks, ranked, strict=True)]

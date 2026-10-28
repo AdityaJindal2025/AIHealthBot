@@ -19,7 +19,7 @@ References: **PS §x** = [problemStatement.md](problemStatement.md), **AP §x** 
 | 6 | Chat service and API | `POST /api/chat`, `GET /api/conversations/{id}`, full lifecycle | 3, 4, 5 | 1 day |
 | 7 | Frontend | Chat UI, claims view, empty sources panel, error state | 6 | 1.5 days |
 | 8 | System prompt v1 and eval suite | `system_v1.md`, `questions.yaml`, runner, first local run | 6 | 1 day |
-| 9 | Production deploy | Backend + Postgres on Railway, frontend on Vercel, CORS, rate limit, prod eval run | 7, 8 | 0.5 day |
+| 9 | Production deploy | Backend (Groq, grounded answers, baked-in embedder) + Postgres with pgvector on Railway, frontend with the theme filter on Vercel, CORS, rate limit, prod eval run | 7, 8 | 1 day |
 | 10 | Baseline and failure log | Reviewed answers, `failureLog.md`, acceptance sign-off | 9 | 0.5–1 day |
 
 **Total: about 9 working days** for one developer. Phases 5 and 7 can run in parallel with 4 and 6 if two people are working.
@@ -369,89 +369,137 @@ flowchart LR
 
 ## Phase 9: Production Deploy
 
+> **Updated 2026-10-28.** Nothing has been deployed yet, so this phase now deploys the app **as it is today**, not the Milestone 1 sketch: the model provider is **Groq** (`openai/gpt-oss-120b`), answers are **grounded** in the 7-document corpus (Milestone 2, [featureImplementationPlan.md](featureImplementationPlan.md) Phase 10), retrieval runs on **pgvector**, and the UI has the **"Select theme"** filter (`backend/corpus/themes.json`). One deploy covers both milestones; the M1 behaviour stays available through the kill switch below.
+
 **Goal:** the complete app is live at a public URL (PS §3.6, Rule 5, AP §11). The **backend and Postgres run on Railway**; the **frontend runs on Vercel**.
 
 ### Topology
 
 | Piece | Host | Built from | Talks to |
 |---|---|---|---|
-| Frontend (Next.js) | Vercel, production domain `https://<project>.vercel.app` | `frontend/` | the backend only, over HTTPS |
-| Backend (FastAPI) | Railway service, public domain `https://<backend>.up.railway.app` | `backend/Dockerfile` + `backend/railway.json` | Postgres (private network) and the Anthropic API |
-| Database (Postgres) | Railway database service in the same project | Railway template | the backend only |
+| Frontend (Next.js 16) | Vercel, production domain `https://<project>.vercel.app` | `frontend/` | the backend only, over HTTPS |
+| Backend (FastAPI) | Railway service, public domain `https://<backend>.up.railway.app` | `backend/Dockerfile` + `backend/railway.json` | Postgres (private network) and the Groq API |
+| Database (Postgres + pgvector) | Railway database service in the same project | Railway Postgres template (or the pgvector template, see step 1) | the backend only |
 
-The browser never calls `api.anthropic.com`, and the API key exists only in Railway variables.
+The browser never calls `api.groq.com`, and the Groq key exists only in Railway variables. The embedding model (`BAAI/bge-small-en-v1.5`) runs **inside the backend container**; there is no separate embedding service and no call to Hugging Face at runtime.
 
-Deploy **in this order**. Each step needs a value from the one before it: backend URL → frontend env var → frontend URL → backend CORS.
+What the backend container does on every start (the Dockerfile `CMD`):
+
+1. `alembic upgrade head`: migrations `0001` (M1 tables) and `0002` (documents, chunks with `vector(384)`, retrievals, citation events; it runs `CREATE EXTENSION IF NOT EXISTS vector`).
+2. `python -m app.rag.build_index --if-changed`: chunks and embeds the corpus (209 chunks) only if the corpus, chunker settings or model changed; otherwise prints `index … is current; nothing to do`. A failed build stops the start.
+3. `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers`. Startup refuses to boot without `GROQ_API_KEY`, with a missing prompt file, or with `RAG_ENABLED` and `PROMPT_VERSION` that don't match (`check_mode`).
+
+`/api/health` returns `503` until the database **and** the index are ready, so Railway never routes traffic to a container with a broken index.
+
+Deploy **in this order**. Each step needs a value from the one before it: database → backend URL → frontend env var → frontend URL → backend CORS.
 
 ### Tasks
 
+**0. Before deploying**
+- [ ] `main` has the commits to ship and CI is green (backend tests, frontend typecheck/lint/tests/build, the `gsk_` bundle check, and the build-report check).
+- [ ] The document registry is verified (`backend/corpus/README.md`, done 2026-10-27). Production refuses unverified entries (`ALLOW_UNVERIFIED_REGISTRY=false`), so a new or edited entry must be verified first or the start fails.
+- [ ] `backend/corpus/themes.json` names only registry documents (a backend test enforces this).
+- [ ] **Groq plan.** The free tier allows `openai/gpt-oss-120b` **8,000 tokens a minute and 200,000 tokens a day**. A grounded answer uses about 3,000 tokens, so the whole deployment gets roughly **60 answers a day**, shared by every user and every eval run (see the eval results, 2026-10-27). For anything beyond a private demo, move the Groq organisation to the Dev tier and set a spend limit in the Groq console.
+- [ ] Build the image locally once (`docker build -t nutrition-backend backend/`) and note its size and the container's memory after one chat request. The CPU-only torch and the bge model add roughly 0.5–1 GB of RAM; check the Railway plan allows it.
+
 **1. Railway: database**
-- [ ] In the Railway project from Phase 1: **New → Database → PostgreSQL**. Keep the service name `Postgres` so the reference below matches.
+- [ ] In the Railway project from Phase 1: **New → Database → PostgreSQL**. Keep the service name `Postgres` so the reference variable below matches.
+- [ ] Open the database's SQL console and run `CREATE EXTENSION IF NOT EXISTS vector;`.
+  - It succeeds → nothing else to do; migration `0002` will find it.
+  - It fails (`extension "vector" is not available`) → delete that service and deploy Railway's **pgvector** Postgres template instead, again named `Postgres`. Nothing has been stored yet, so no data needs moving.
 
 **2. Railway: backend service**
 - [ ] Check the service settings from Phase 1:
   - **Source:** the GitHub repo, branch `main`, with **Wait for CI** on, so a deploy starts only after `ci.yml` passes.
   - **Root Directory:** `/backend`.
-  - **Config File Path:** `/backend/railway.json`. The config path does **not** follow the root directory, so set it in full. Without it Railway ignores the health check and restart policy.
-  - **Watch Paths:** `/backend/**`, so frontend-only commits don't redeploy the API.
-  - **Custom Start Command:** leave **empty**. The Dockerfile `CMD` already runs `alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers`.
-  - **Replicas:** `1` (set in `railway.json`). Migrations run on every start, and the rate limiter keeps its counts in memory (EC DB-09).
+  - **Config File Path:** `/backend/railway.json`. The config path does **not** follow the root directory, so set it in full. Without it Railway ignores the health check, its 300 s timeout and the restart policy.
+  - **Watch Paths:** `/backend/**`, so frontend-only commits don't redeploy the API. (Corpus and theme changes live under `backend/corpus/`, so they do redeploy, and the index rebuilds only if the corpus changed.)
+  - **Custom Start Command:** leave **empty**; the Dockerfile `CMD` above must run as written.
+  - **Replicas:** `1` (set in `railway.json`). Migrations and the index build run on every start, and the rate limiter keeps its counts in memory (EC DB-09).
+  - **Resources:** at least 1 GB of memory for the embedder (see step 0).
 - [ ] Set the service **Variables**:
 
   | Variable | Value | Notes |
   |---|---|---|
   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | Reference variable over the private network. `config.py` rewrites it to `postgresql+psycopg://`. |
-  | `ANTHROPIC_API_KEY` | production key | Mark as **sealed**. The app refuses to boot without it. |
-  | `MODEL_ID` | a current Claude model ID | Set it explicitly; don't rely on the code default. |
-  | `PROMPT_VERSION` | `v1` | Must match a file in `app/llm/prompts/`, or startup fails. |
+  | `GROQ_API_KEY` | production key | Mark as **sealed**. The app refuses to boot without it. |
+  | `MODEL_ID` | `openai/gpt-oss-120b` | Set explicitly; it must be a Groq model with strict structured outputs. It is the model every eval run so far used. |
+  | `RAG_ENABLED` | `true` | Grounded answers. Must match `PROMPT_VERSION` or startup fails. |
+  | `PROMPT_VERSION` | `v2` | Must exist in `app/llm/prompts/`. `v2` needs `RAG_ENABLED=true`; `v1` needs `false`. |
+  | `ALLOW_UNVERIFIED_REGISTRY` | `false` | Production never serves unverified citations. Never set it to `true` here. |
   | `CORS_ORIGINS` | `https://<project>.vercel.app` | Exact origin: no path, no trailing slash, never `*`. Comma-separate extra origins (such as a custom domain). |
   | `TRUST_PROXY` | `true` | The rate limit uses the real client IP from Railway's `X-Forwarded-For`. |
   | `RATE_LIMIT` | `20/minute` | Default; set only to change it. |
   | `LOG_LEVEL` | `INFO` | |
 
-  Do **not** set `PORT`; Railway injects it.
+  Leave the retrieval and chunking settings (`EMBEDDING_MODEL`, `RETRIEVAL_*`, `CHUNK_*`) **unset**: the code defaults are the calibrated values (k = 6, 20 candidates, 2 per document, floor 0.73; README "Retrieval parameters"). Changing `EMBEDDING_MODEL` or a `CHUNK_*` value triggers a full index rebuild on the next start and needs the floor re-calibrated first. `CORPUS_DIR` and `HF_HUB_OFFLINE` are set by the Dockerfile. Do **not** set `PORT`; Railway injects it.
 - [ ] **Networking:** the public domain from Phase 1 exists. Its target port is the one Railway injects as `$PORT`.
-- [ ] Deploy and check:
-  - the deploy logs show `alembic upgrade head` finishing, then a `startup` line with the expected `model`, `prompt_version` and `cors_origins`
-  - `curl https://<backend>.up.railway.app/api/health` returns `{"status":"ok","db":"ok"}` (a `503` with `"db":"error"` means `DATABASE_URL` is wrong)
+- [ ] Deploy and check, in the deploy logs, in this order:
+  - `alembic upgrade head` finishes (`0001`, then `0002`)
+  - `built index <corpus_version>: 209 chunks in …s` on the first deploy
+  - a `startup` line with `model=openai/gpt-oss-120b`, `prompt_version=v2`, `rag_enabled=true` and the expected `cors_origins`
+- [ ] From a terminal:
+  - `curl https://<backend>.up.railway.app/api/health` → `{"status":"ok","db":"ok","index":{"status":"ready","chunks":209,…}}`. A `503` with `"db":"error"` means `DATABASE_URL` is wrong; `"index"` not ready means the build failed (read the deploy log).
+  - `curl https://<backend>.up.railway.app/api/documents` → 7 documents, each with a year and an `https://` URL.
+  - `curl https://<backend>.up.railway.app/api/themes` → the 5 themes.
+  - One grounded question:
+    `curl -s -X POST https://<backend>.up.railway.app/api/chat -H 'Content-Type: application/json' -d '{"message":"How long can egg salad be kept in the fridge?"}'` → `grounding.status` is `grounded` and every claim has a `source`.
+- [ ] Redeploy once without changes and check the log says the index **is current** (the `--if-changed` skip works, so restarts are fast).
 
 **3. Vercel: frontend**
 - [ ] Check the project settings from Phase 1:
   - **Root Directory:** `frontend`. Framework preset **Next.js**, with the default build (`next build`) and install commands.
-  - **Node.js version:** 20.x, the same as CI.
+  - **Node.js version:** the same major version as CI (`node-version` in `.github/workflows/ci.yml`, currently 20). If Vercel no longer offers it, choose the next LTS on Vercel and change `ci.yml` to match in the same PR.
   - **Skip deployments when there are no changes to the root directory:** on, so backend-only commits don't rebuild the site.
   - **Production branch:** `main`.
-- [ ] **Environment Variables:** `NEXT_PUBLIC_API_BASE_URL=https://<backend>.up.railway.app` for **Production**. It is inlined at build time, so **redeploy** after every change (EC OPS-05).
-- [ ] **Preview deployments:** each preview gets its own URL, which is not in `CORS_ORIGINS`. So previews can show the UI but cannot call the production API. That is accepted for M1. Do not widen `CORS_ORIGINS` to a wildcard to "fix" it.
+- [ ] **Environment Variables:** `NEXT_PUBLIC_API_BASE_URL=https://<backend>.up.railway.app` for **Production**. It is inlined at build time, so **redeploy** after every change (EC OPS-05). No other variables: the theme list comes from the backend (`GET /api/themes`), so it needs no frontend change when `themes.json` changes.
+- [ ] **Preview deployments:** each preview gets its own URL, which is not in `CORS_ORIGINS`. So previews can show the UI but cannot call the production API. That is accepted. Do not widen `CORS_ORIGINS` to a wildcard to "fix" it.
 - [ ] Trigger a production deploy and open `https://<project>.vercel.app`.
 
 **4. Wire CORS**
-- [ ] If the Vercel production domain changed (or a custom domain was added), update `CORS_ORIGINS` on Railway. A variable change redeploys the service.
+- [ ] If the Vercel production domain changed (or a custom domain was added), update `CORS_ORIGINS` on Railway. A variable change redeploys the service (the index is not rebuilt).
 - [ ] Check the preflight from a terminal:
   `curl -si -X OPTIONS https://<backend>.up.railway.app/api/chat -H "Origin: https://<project>.vercel.app" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: content-type"`
   The response includes `access-control-allow-origin: https://<project>.vercel.app`.
 
 **5. Production checks**
+- [ ] In the browser, on the production URL:
+  - the **"Select theme"** dropdown lists "All themes" and the 5 themes (if it is missing, `/api/themes` failed: check CORS and the backend URL)
+  - a question with "All themes" gives a grounded answer with citation chips, and the sources panel shows the cited excerpts with document links
+  - the same question under an unrelated theme (for example a fridge question under "Sugar, salt & fats") gives a "not covered" note that lists only that theme's documents
+  - "How many calories should I eat to lose 5 kg?" is declined with a referral
 - [ ] Security check:
-  - open the built JS bundle in the browser devtools and confirm there is **no** `sk-ant` string (CI also greps `.next/static`)
-  - the Network tab shows calls only to the Railway domain, never `api.anthropic.com`
-- [ ] Check the rate limit in production: 21 fast requests produce a `429`, and requests from a second network still succeed. This proves `TRUST_PROXY` is working.
-- [ ] Confirm the monthly spend limit is set in the Anthropic Console.
-- [ ] Run `python evals/run_evals.py --base-url https://<backend>.up.railway.app` against **production** (or trigger the `Evals` workflow with that URL) and commit the run.
-- [ ] Add both public URLs to `README.md`.
+  - open the built JS bundle in the browser devtools and confirm there is **no** `gsk_` string (CI also greps `.next/static`)
+  - the Network tab shows calls only to the Railway domain, never `api.groq.com`
+- [ ] Check the rate limit in production: 21 fast requests produce a `429`, and requests from a second network still succeed. This proves `TRUST_PROXY` is working. (Use a declined question such as the calorie one: it never calls Groq, so the check spends no tokens.)
+- [ ] Run the evals against **production** with `python evals/run_evals.py --base-url https://<backend>.up.railway.app --repeat 1` (or the `Evals` workflow with that URL). The runner detects grounded mode from `/api/health`. Use `--repeat 1`: a full grounded run with `--repeat 3` does not fit in one day of the free Groq tier and would also lock real users out for the day. Commit the run and add it to `Docs/evalResults.md`.
+- [ ] Add both public URLs to `README.md` ("Public URLs").
 
 ### Release and Rollback
 - **Normal release:** merge to `main` → CI runs → Railway deploys `backend/` (after CI passes) and Vercel builds `frontend/`. Changed paths decide which services rebuild.
-- **Contract changes:** deploy the backend first, and keep the API backwards compatible until the frontend that needs the change is live.
-- **Backend rollback:** Railway → Deployments → **Redeploy** the last good deployment. Migrations only run forward, so an M1 migration must be **additive** (new tables or nullable columns). A rolled-back image then still works on the newer schema.
+- **Corpus or theme changes:** edit under `backend/corpus/`, regenerate and commit `build_report.md` with the change, verify any new registry entry, and merge. The next start rebuilds the index only if `corpus_version` changed (themes do not change it).
+- **Contract changes:** deploy the backend first, and keep the API backwards compatible until the frontend that needs the change is live. (Example: `theme_id` and `/api/themes` are additive; an older frontend still works.)
+- **Kill switch (no redeploy of code):** set `RAG_ENABLED=false` and `PROMPT_VERSION=v1` on Railway. The backend returns the exact M1 envelope, the theme filter hides itself (themed requests are refused in M1 mode), and the data stays. Set both back to return to grounded mode.
+- **Backend rollback:** Railway → Deployments → **Redeploy** the last good deployment. Migrations only run forward and are **additive** (`0002` adds tables and one nullable column), so an older image still works on the newer schema.
 - **Frontend rollback:** Vercel → Deployments → **Instant Rollback** to the previous production deployment.
 
+### When something goes wrong
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Deploy fails at `alembic upgrade head` with `extension "vector" is not available` | Plain Postgres without pgvector | Step 1: switch to the pgvector template |
+| Deploy fails at the index build with a registry error | An unverified or incomplete `documents.json` entry | Verify the entry (`backend/corpus/README.md`); never set `ALLOW_UNVERIFIED_REGISTRY=true` in production |
+| Health check times out after 300 s | The container ran out of memory loading the embedder, or the build is slow | Raise the service memory; check the log for the index build time |
+| Startup fails with a mode error | `RAG_ENABLED` and `PROMPT_VERSION` don't match | `true` + `v2`, or `false` + `v1` |
+| The UI shows "The assistant is busy right now" | Groq refused the request: usually the **daily** token cap | The failure's `error_detail` names the limit. Wait for the window to roll, or upgrade the Groq tier |
+| The UI loads but every request fails with a network error | CORS or `NEXT_PUBLIC_API_BASE_URL` | Step 4 preflight; redeploy Vercel after changing the variable |
+
 ### Exit Gate
-- The public Vercel URL works end-to-end from a device outside your network (a phone on mobile data).
-- `/api/health` on the Railway domain returns `ok` for both the service and the database.
+- The public Vercel URL works end-to-end from a device outside your network (a phone on mobile data): grounded, cited answers, the theme filter, and a decline.
+- `/api/health` on the Railway domain returns `ok` for the service and the database, and `index.status` is `ready` with 209 chunks.
 - The CORS preflight from the Vercel origin succeeds, and a request with any other origin gets no `access-control-allow-origin` header.
 - The production eval run is committed.
-- The Railway Postgres database contains the eval conversations, and any `failures` / `scope_events` rows.
+- The Railway Postgres database contains the eval conversations, their `retrievals`, and any `failures` / `scope_events` / `citation_events` rows.
 
 ---
 
@@ -508,6 +556,9 @@ Deploy **in this order**. Each step needs a value from the one before it: backen
 | The model splits claims inconsistently | A noisy claims list | Tighten the prompt through versioned changes and check with evals. Claims are not graded for quality in M1, only for schema. |
 | The SDK structured-output API differs from what the plan assumes | Phase 4 is blocked | Check against the installed SDK's docs early (the Phase 4 smoke script). Fall back to `messages.create` with `output_config.format` + Pydantic validation. Never fall back to prose parsing. |
 | Railway Postgres URL scheme mismatch | The backend fails to boot | Normalise the URL in `session.py` (Phase 3). |
+| pgvector not available on Railway Postgres | Migration `0002` fails; the backend never starts | Phase 9 step 1 checks `CREATE EXTENSION vector` before the first backend deploy; fall back to Railway's pgvector template. |
+| The embedder needs more memory than the plan allows | The container is killed; the health check times out | Measure the image locally (Phase 9 step 0) and size the Railway service to at least 1 GB. |
+| Groq's free-tier daily token cap (200,000 tokens, about 60 grounded answers) | Users see "busy" for the rest of the day | Upgrade the Groq tier for real use; run production evals with `--repeat 1`; rate-limit checks use questions that never call the model. |
 | CORS misconfiguration after a domain change | The frontend can't reach the API | The skeleton deploy in Phase 1 proves it early. `CORS_ORIGINS` is an env var, not hard-coded, and the Phase 9 preflight `curl` checks it. |
 | Railway config file not picked up in the monorepo | No health check or restart policy; a broken build goes live | Set **Config File Path** to `/backend/railway.json` explicitly (Phase 1). |
 | `NEXT_PUBLIC_API_BASE_URL` changed without a rebuild | The site still calls the old backend | It is inlined at build time: redeploy on Vercel after every change. |

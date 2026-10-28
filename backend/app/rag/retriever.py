@@ -1,10 +1,12 @@
-"""Retrieval across all documents or filtered to one (FPS §4.2, FAP §7).
+"""Retrieval across all documents, filtered to one, or limited to a theme's documents (FPS §4.2, FAP §7).
 
 `retrieve()` embeds the query, takes the top candidates from the vector store and selects
 up to k chunks:
 
 - **filtered** (a `document_id` given, or exactly one document named in the message):
   only that document, no per-document cap
+- **theme** (a theme chosen in the UI): only the theme's documents, with the per-document cap
+  raised so a two-document theme can still fill k slots
 - **all documents**: in score order, at most `RETRIEVAL_MAX_PER_DOC` per document, so one
   large document (kitchen-companion is ~47% of the corpus) cannot fill every slot
 
@@ -15,6 +17,7 @@ The result holds plain snapshots, not ORM rows, so it can be stored with the mes
 history still shows what was retrieved after the index is rebuilt.
 """
 
+import math
 import re
 from dataclasses import asdict, dataclass, field
 from typing import Literal
@@ -26,6 +29,7 @@ from app.config import get_settings
 from app.db.models import Document, IndexMeta
 from app.rag.embedder import get_embedder
 from app.rag.store import Hit, get_store
+from app.rag.themes import Theme
 
 FOLLOW_UP_MARKERS = ("what about", "and ", "how about", "is that", "what if", "same for", "and?")
 FOLLOW_UP_MAX_WORDS = 6
@@ -67,7 +71,7 @@ class RetrievedChunk:
 
 @dataclass
 class RetrievalResult:
-    mode: Literal["all", "filtered"]
+    mode: Literal["all", "filtered", "theme"]
     query_text: str
     filter_document_id: str | None
     filter_source: Literal["explicit", "detected"] | None
@@ -79,6 +83,7 @@ class RetrievalResult:
     # Set when the best match is itself restricted: the caller declines (stage=retrieval).
     restricted_top: str | None = None
     restricted_top_rule_id: str | None = None
+    theme_id: str | None = None
 
 
 def _normalise(text: str) -> str:
@@ -113,6 +118,7 @@ def retrieve(
     *,
     previous_user_message: str | None = None,
     document_id: str | None = None,
+    theme: Theme | None = None,
     k: int | None = None,
     max_per_doc: int | None = None,
 ) -> RetrievalResult:
@@ -127,7 +133,11 @@ def retrieve(
         raise RetrievalError("retrieval_error", f"{type(e).__name__}: {e}") from e
 
     filter_source: Literal["explicit", "detected"] | None = None
-    if document_id is not None:
+    theme_docs = theme.document_ids if theme and document_id is None else None
+    if theme_docs:
+        # A chosen theme is the user's filter; a document named in the message does not override it.
+        max_per_doc = max(max_per_doc, math.ceil(k / len(theme_docs)))
+    elif document_id is not None:
         filter_source = "explicit"
     else:
         document_id = detect_document(message, list(documents.values()))
@@ -139,18 +149,20 @@ def retrieve(
     except Exception as e:
         raise RetrievalError("embedding_error", f"{type(e).__name__}: {e}") from e
     try:
-        candidates = get_store(db).search(query_vec, settings.RETRIEVAL_CANDIDATES, document_id=document_id)
+        candidates = get_store(db).search(query_vec, settings.RETRIEVAL_CANDIDATES, document_id=document_id,
+                                            document_ids=theme_docs)
     except Exception as e:
         raise RetrievalError("retrieval_error", f"{type(e).__name__}: {e}") from e
 
     result = RetrievalResult(
-        mode="filtered" if document_id else "all",
+        mode="filtered" if document_id else ("theme" if theme_docs else "all"),
         query_text=query_text,
         filter_document_id=document_id,
         filter_source=filter_source,
         k=k,
         corpus_version=corpus_version,
         top_score=candidates[0].score if candidates else None,
+        theme_id=theme.theme_id if theme_docs else None,
     )
     if candidates and candidates[0].chunk.restricted_category:
         result.restricted_top = candidates[0].chunk.restricted_category

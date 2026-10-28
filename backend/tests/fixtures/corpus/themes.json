@@ -1,0 +1,6 @@
+[
+  {"theme_id": "safety", "name": "Food safety", "description": "Storing and chilling food",
+   "document_ids": ["alpha-safety", "delta-chill"]},
+  {"theme_id": "diet", "name": "Diet", "description": "Salt, fats and healthy eating",
+   "document_ids": ["beta-diet", "gamma-salt", "epsilon-fats"]}
+]

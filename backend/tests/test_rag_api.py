@@ -335,3 +335,60 @@ def test_provider_rate_limit_in_grounded_mode_is_503(client, db, rag, model):
     failure = db.scalars(select(Failure)).one()
     assert failure.type == "rate_limited"
     assert db.scalars(select(Retrieval)).one().failure_id == failure.id
+
+
+# --- Themes: retrieval limited to a named group of documents ---
+
+
+@pytest.fixture
+def themed(rag, monkeypatch):
+    monkeypatch.setattr(rag, "CORPUS_DIR", str(FIXTURE))
+    return rag
+
+
+def test_themes_endpoint(client, themed):
+    themes = client.get("/api/themes").json()["themes"]
+    assert [t["theme_id"] for t in themes] == ["safety", "diet"]
+    assert themes[0] == {"theme_id": "safety", "name": "Food safety", "description": "Storing and chilling food",
+                         "document_ids": ["alpha-safety", "delta-chill"]}
+
+
+def test_themed_request_searches_and_cites_only_theme_documents(client, themed, model):
+    model.state["answer"] = lambda turn: GroundedOutput(coverage="covered", claims=[
+        GroundedClaim(text="Freeze food at -18°C or below.", source_label=lbl) for lbl in list(labels(turn))[:1]])
+    body = post(client, "freezer temperature salt", theme_id="safety").json()
+    assert body["grounding"]["theme_id"] == "safety" and body["grounding"]["filter_document_id"] is None
+    assert [s["document_id"] for s in body["grounding"]["searched"]] == ["alpha-safety", "delta-chill"]
+    assert {s["document_id"] for s in body["sources"]} <= {"alpha-safety", "delta-chill"}
+    assert set(labels(model.calls[0][1]).values()) <= {"Alpha Food Safety Guide", "Delta Chilling Advice"}
+
+
+def test_themed_not_covered_names_the_theme_documents(client, themed, model):
+    model.state["answer"] = lambda turn: GroundedOutput(coverage="not_covered", claims=[])
+    body = post(client, "intermittent fasting", theme_id="safety").json()
+    assert body["grounding"]["status"] == "not_covered"
+    assert body["answer"].startswith("The guidance I searched doesn't cover this. I searched: ")
+    assert [s["document_id"] for s in body["grounding"]["searched"]] == ["alpha-safety", "delta-chill"]
+
+
+def test_unknown_theme_is_422_and_writes_nothing(client, db, themed, model):
+    r = post(client, "salt", theme_id="no-such-theme")
+    assert r.status_code == 422 and r.json()["error"] == "unknown_theme"
+    assert count(db, Message) == 0
+
+
+def test_theme_and_document_together_is_422(client, db, themed, model):
+    r = post(client, "salt", theme_id="safety", document_id="alpha-safety")
+    assert r.status_code == 422 and r.json()["error"] == "invalid_request"
+    assert count(db, Message) == 0
+
+
+def test_m1_mode_rejects_theme_filter(client, db):
+    r = post(client, "salt", theme_id="safety")
+    assert r.status_code == 422 and r.json()["error"] == "unknown_theme"
+
+
+def test_themes_endpoint_is_empty_in_m1_mode(client, themed, monkeypatch):
+    # Kill switch: the index (and its documents) stay in the database, but themes are hidden.
+    monkeypatch.setattr(themed, "RAG_ENABLED", False)
+    assert client.get("/api/themes").json() == {"themes": []}

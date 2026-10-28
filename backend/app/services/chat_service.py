@@ -30,6 +30,7 @@ from app.rag.citations import PublisherInfo, check_claims
 from app.rag.composer import compose_answer, compose_not_covered
 from app.rag.context import format_sources
 from app.rag.retriever import RetrievalError, RetrievalResult, RetrievedChunk, retrieve
+from app.rag.themes import Theme, get_themes
 from app.schemas.api import (
     ChatRequest,
     ChatResponse,
@@ -128,8 +129,15 @@ def _handle(db: Session, req: ChatRequest, ctx: dict[str, Any]) -> ChatResponse:
         documents = {d.document_id: d for d, _ in repo.list_documents(db)}
         if req.document_id is not None and req.document_id not in documents:
             raise ChatError(422, "unknown_document", detail=f"No document with id {req.document_id!r}.")
+        if req.theme_id is not None:
+            if req.document_id is not None:
+                raise ChatError(422, "invalid_request", detail="Choose a document or a theme, not both.")
+            if _theme(documents, req.theme_id) is None:
+                raise ChatError(422, "unknown_theme", detail=f"No theme with id {req.theme_id!r}.")
     elif req.document_id is not None:
         raise ChatError(422, "unknown_document", detail="Document filters need grounded mode.")
+    elif req.theme_id is not None:
+        raise ChatError(422, "unknown_theme", detail="Theme filters need grounded mode.")
 
     # 1. Load or create the conversation.
     if req.conversation_id is not None:
@@ -270,9 +278,19 @@ def _persist_assistant(db: Session, conversation_id: uuid.UUID, output: Assistan
 # --- Grounded path (FAP §11.4) ---------------------------------------------------------------
 
 
-def _searched(documents: dict[str, Document], filter_document_id: str | None) -> list[SearchedDocument]:
+def _theme(documents: dict[str, Document], theme_id: str | None) -> Theme | None:
+    return next((t for t in get_themes(set(documents)) if t.theme_id == theme_id), None) if theme_id else None
+
+
+def _searched(documents: dict[str, Document], filter_document_id: str | None,
+              theme: Theme | None = None) -> list[SearchedDocument]:
     """What was searched, from the registry, never from the model (FAP §10.1)."""
-    ids = [filter_document_id] if filter_document_id else sorted(documents)
+    if filter_document_id:
+        ids = [filter_document_id]
+    elif theme:
+        ids = list(theme.document_ids)
+    else:
+        ids = sorted(documents)
     return [SearchedDocument(document_id=d.document_id, document_name=d.title, publisher=d.publisher, year=d.year,
                              url=d.url) for d in (documents[i] for i in ids)]
 
@@ -307,7 +325,7 @@ def _handle_grounded(db: Session, conversation_id: uuid.UUID, req: ChatRequest, 
                      documents: dict[str, Document], ctx: dict[str, Any]) -> ChatResponse:
     settings = get_settings()
     base_context = {"message": req.message, "prompt_version": settings.PROMPT_VERSION,
-                    "document_id": req.document_id}
+                    "document_id": req.document_id, "theme_id": req.theme_id}
 
     def fail(type_: str, detail: str, raw_output: str | None, retrieval: RetrievalResult | None,
              extra: dict[str, Any] | None = None, dropped=None, status: int = 502,
@@ -322,15 +340,16 @@ def _handle_grounded(db: Session, conversation_id: uuid.UUID, req: ChatRequest, 
         return ChatError(status, error, failure_id=failure_id, detail=type_, retry_after=retry_after)
 
     # 4. Retrieve. The previous question rides along for short follow-ups (FAP §7.3).
+    theme = _theme(documents, req.theme_id)
     try:
         retrieval = retrieve(db, req.message, previous_user_message=history.previous_user_text,
-                             document_id=req.document_id)
+                             document_id=req.document_id, theme=theme)
     except RetrievalError as e:
         raise fail(e.type, e.detail, None, None, error="retrieval_failed") from e
     ctx.update(top_score=retrieval.top_score, filter_document_id=retrieval.filter_document_id,
-               corpus_version=retrieval.corpus_version)
+               theme_id=retrieval.theme_id, corpus_version=retrieval.corpus_version)
     meta = Meta(prompt_version=settings.PROMPT_VERSION, corpus_version=retrieval.corpus_version)
-    searched = _searched(documents, retrieval.filter_document_id)
+    searched = _searched(documents, retrieval.filter_document_id, theme if retrieval.mode == "theme" else None)
     filtered = retrieval.mode == "filtered"
 
     # 5. The best match is itself a calorie or weight target: decline, model not called (FAP §10.3).
@@ -396,8 +415,8 @@ def _handle_grounded(db: Session, conversation_id: uuid.UUID, req: ChatRequest, 
     if any(c.source is None for c in output.claims):
         raise fail("missing_citation", "composed claim without a source", output.model_dump_json(), retrieval)
 
-    grounding = Grounding(status="grounded", filter_document_id=retrieval.filter_document_id, searched=searched,
-                          top_score=retrieval.top_score)
+    grounding = Grounding(status="grounded", filter_document_id=retrieval.filter_document_id,
+                          theme_id=retrieval.theme_id, searched=searched, top_score=retrieval.top_score)
     ctx["grounding_status"] = "grounded"
     response = _persist_assistant(db, conversation_id, output, meta, usage, grounding=grounding,
                                   sources=_sources(retrieval.hits, cited))
@@ -412,8 +431,8 @@ def _not_covered(db: Session, conversation_id: uuid.UUID, retrieval: RetrievalRe
                  ctx: dict[str, Any]) -> ChatResponse:
     """"We don't have guidance on that": in scope, but the documents don't answer it (FPS §4.5)."""
     output = compose_not_covered(searched, filtered=filtered)
-    grounding = Grounding(status="not_covered", filter_document_id=retrieval.filter_document_id, searched=searched,
-                          top_score=retrieval.top_score)
+    grounding = Grounding(status="not_covered", filter_document_id=retrieval.filter_document_id,
+                          theme_id=retrieval.theme_id, searched=searched, top_score=retrieval.top_score)
     ctx["grounding_status"] = "not_covered"
     response = _persist_assistant(db, conversation_id, output, meta, usage, grounding=grounding,
                                   sources=_sources(retrieval.hits, set()))

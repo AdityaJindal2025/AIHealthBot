@@ -1,0 +1,32 @@
+[
+  {
+    "theme_id": "food-storage",
+    "name": "Food storage & refrigeration",
+    "description": "How long foods keep, and how to chill, freeze and defrost them safely",
+    "document_ids": ["cold-food-storage", "fsa-chill", "kitchen-companion"]
+  },
+  {
+    "theme_id": "safe-cooking",
+    "name": "Safe cooking & food hygiene",
+    "description": "Cooking temperatures, cleanliness and avoiding cross-contamination",
+    "document_ids": ["who-five-keys", "kitchen-companion"]
+  },
+  {
+    "theme_id": "healthy-diet",
+    "name": "Healthy diet principles",
+    "description": "What a healthy diet is, according to WHO and FAO",
+    "document_ids": ["fao-who-healthy-diets", "who-healthy-diet"]
+  },
+  {
+    "theme_id": "balanced-meals",
+    "name": "Food groups & balanced meals",
+    "description": "Food groups, portions, drinks and food labels",
+    "document_ids": ["eatwell-guide", "fao-who-healthy-diets"]
+  },
+  {
+    "theme_id": "sugar-salt-fat",
+    "name": "Sugar, salt & fats",
+    "description": "Limits and advice on sugar, salt and fats",
+    "document_ids": ["who-healthy-diet", "eatwell-guide"]
+  }
+]

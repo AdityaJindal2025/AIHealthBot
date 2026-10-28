@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 
 import { ChatInput } from "@/components/ChatInput";
-import { DocumentFilter } from "@/components/DocumentFilter";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { BookIcon, CloseIcon, LogoMark, PlusIcon } from "@/components/Icons";
 import { MessageList } from "@/components/MessageList";
 import { SourcesPanel } from "@/components/SourcesPanel";
+import { ThemeFilter } from "@/components/ThemeFilter";
 import { useChat } from "@/lib/useChat";
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-container";
@@ -87,10 +87,10 @@ export default function Home() {
               onDismiss={chat.dismissError}
             />
           )}
-          <DocumentFilter
-            documents={chat.documents}
-            value={chat.documentId}
-            onChange={chat.setDocumentId}
+          <ThemeFilter
+            themes={chat.themes}
+            value={chat.themeId}
+            onChange={chat.setThemeId}
             disabled={chat.sending}
           />
           <ChatInput disabled={chat.sending || chat.loadingHistory} onSend={chat.send} />
